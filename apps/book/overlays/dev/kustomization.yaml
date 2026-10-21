@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: v2-dev
+resources:
+  - ../../base
+labels:
+  - pairs:
+      lab.personal-server-v2/environment: dev
+    includeSelectors: false
+    includeTemplates: true
+images:
+  - name: v2-book
+    newName: localhost:5001/v2-book
+    digest: sha256:ca0401f57c9957006104e9803d180e57b3888f34631cb86d28cc15fd9a93d5b1

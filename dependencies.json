@@ -1,0 +1,12 @@
+{
+  "k3d": "v5.9.0",
+  "k3d_darwin_arm64_sha256": "fe106541d5d0a3f18debcd4d432a16f8c0ce3e6ddc06f8fbb6f696a122313e00",
+  "kubectl": "v1.35.5",
+  "k3s": "v1.35.5-k3s1",
+  "registry": "registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373",
+  "argocd_chart_file": "argo-cd-10.10.5.tgz",
+  "argocd_chart_sha256": "ba6447eeed42bc41d1f0527721047b236304e97669a7b6286d02be4a1644ba7a",
+  "argocd": "v3.5.5",
+  "book_source_commit": "23572de06038341fc2ed11714cccde04e9967080",
+  "kubectl_darwin_arm64_sha256": "4d79aa4ca3015d6c70ac593d8c387efe09f4000b5ff1098f42610e6030a8ccb3"
+}
