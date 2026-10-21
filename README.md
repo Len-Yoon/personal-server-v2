@@ -6,7 +6,7 @@
 |---|---|---|
 | V1 | [personal-server](https://github.com/Len-Yoon/personal-server)의 실제 서비스 운영·유지보수 | 기존 저장소·운영 구성 보존 |
 | V2 | 맥북 로컬 Kubernetes 운영 실습 | V1 전체 복제·즉시 대체 아님 |
-| 현재 상태 | 로컬 k3d·Book dev/verify·Argo CD 구현 및 로컬 검증 진행 | GitOps 연결·최종 검토는 검증 기록 참조 |
+| 현재 상태 | 로컬 k3d·Book·GitOps·장애 실습 구현·검증 | 사용자 직접 진단 및 후속 단계는 별도 |
 | 운영 보호 | N100 접속·동기화·이미지 반입·배포·운영 데이터 사용 제외 | 별도 명시 승인 전 금지 |
 
 ## 개발 방향

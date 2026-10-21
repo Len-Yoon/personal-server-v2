@@ -536,4 +536,6 @@ def main():
 
 if __name__ == '__main__':
     os.umask(0o077)
+    if LOCAL.exists():
+        LOCAL.chmod(0o700)
     sys.exit(main())

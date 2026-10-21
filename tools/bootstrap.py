@@ -27,6 +27,8 @@ def main():
     if platform.system() != 'Darwin' or platform.machine() != 'arm64':
         raise RuntimeError('이 bootstrap은 macOS ARM64만 지원함. CI는 별도 검증 workflow 사용')
     os.umask(0o077)
+    (ROOT / '.local').mkdir(exist_ok=True, mode=0o700)
+    (ROOT / '.local').chmod(0o700)
     download(f'https://github.com/k3d-io/k3d/releases/download/{LOCK["k3d"]}/k3d-darwin-arm64', ROOT / '.tools/bin/k3d', LOCK['k3d_darwin_arm64_sha256'])
     download(f'https://dl.k8s.io/release/{LOCK["kubectl"]}/bin/darwin/arm64/kubectl', ROOT / '.tools/bin/kubectl', LOCK['kubectl_darwin_arm64_sha256'])
     download(f'https://github.com/argoproj/argo-helm/releases/download/argo-cd-10.10.5/{LOCK["argocd_chart_file"]}', ROOT / '.local/cache' / LOCK['argocd_chart_file'], LOCK['argocd_chart_sha256'])
