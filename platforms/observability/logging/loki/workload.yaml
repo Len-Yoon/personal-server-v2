@@ -95,8 +95,7 @@ spec:
           periodSeconds: 5
           timeoutSeconds: 2
         livenessProbe:
-          httpGet:
-            path: /metrics
+          tcpSocket:
             port: http
           periodSeconds: 10
           timeoutSeconds: 2

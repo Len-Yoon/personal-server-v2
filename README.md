@@ -6,7 +6,7 @@
 |---|---|---|
 | V1 | [personal-server](https://github.com/Len-Yoon/personal-server)의 실제 서비스 운영·유지보수 | 기존 저장소·운영 구성 보존 |
 | V2 | 맥북 로컬 Kubernetes 운영 실습 | V1 전체 복제·즉시 대체 아님 |
-| 현재 상태 | root/self·Book·Portal·YouTube·관측 GitOps 및 연계 검증 완료 | Loki·trace는 후속 |
+| 현재 상태 | root/self·Book·Portal·YouTube·관측 GitOps·서비스 연계·Loki 로그 수집 검증 완료 | Loki·trace는 후속 |
 | 운영 보호 | N100 접속·동기화·이미지 반입·배포·운영 데이터 사용 제외 | 별도 명시 승인 전 금지 |
 
 ## 개발 방향
