@@ -5,3 +5,4 @@ resources:
   - ../../namespaces
   - ../../argocd
   - ../../observability
+  - ../../services

@@ -1,0 +1,149 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: portal
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  progressDeadlineSeconds: 180
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: &id001
+      app.kubernetes.io/name: portal
+  template:
+    metadata:
+      labels: *id001
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - k3d-ps-v2-agent-0
+      containers:
+      - name: portal
+        image: localhost:5001/v2-portal:pending
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8000
+        envFrom:
+        - secretRef:
+            name: portal-auth
+        env:
+        - name: APP_ENV
+          value: development
+        - name: PYTHONDONTWRITEBYTECODE
+          value: '1'
+        - name: PORTAL_HOME_URL
+          value: http://127.0.0.1:8000
+        - name: V2_COOKIE_PREFIX
+          value: v2_dev_
+        - name: FILE_STORAGE_PATH
+          value: /var/lib/portal/files
+        - name: SECURITY_LOG_PATH
+          value: /var/lib/portal/logs/security-events.txt
+        - name: AUTH_RATE_LIMIT_STATE_PATH
+          value: /var/lib/portal/auth/state.json
+        - name: HOMEOPS_DB_PATH
+          value: /var/lib/portal/homeops.sqlite3
+        - name: NEWS_BOOKMARK_DB_PATH
+          value: /var/lib/portal/news-bookmarks.sqlite3
+        - name: PORTFOLIO_CONTENT_PATH
+          value: /var/lib/portal/portfolio/portfolio.md
+        - name: FILE_MANAGER_AUTH_REQUIRED
+          value: 'true'
+        - name: FILE_STORAGE_QUOTA_MB
+          value: '512'
+        - name: FILE_MIN_FREE_MB
+          value: '64'
+        - name: YOUTUBE_MEMO_URL
+          value: http://127.0.0.1:8002
+        - name: BOOK_MEMO_URL
+          value: http://127.0.0.1:8003
+        - name: BOOKS_HEALTH_URL
+          value: http://book:8003/health
+        - name: YOUTUBE_HEALTH_URL
+          value: http://youtube:8002/health
+        - name: BOOKS_SEARCH_URL
+          value: http://book:8003/api/search
+        - name: YOUTUBE_SEARCH_URL
+          value: http://youtube:8002/api/search
+        - name: DEMO_MODE
+          value: 'false'
+        - name: HOMEOPS_EXECUTOR_URL
+          value: http://127.0.0.1:9
+        - name: NEWS_SEARCH_URL
+          value: http://127.0.0.1:9
+        - name: NEWS_HEALTH_URL
+          value: http://127.0.0.1:9
+        - name: SYSTEM_AGENT_URL
+          value: http://127.0.0.1:9
+        - name: SYSTEM_AGENT_HEALTH_URL
+          value: http://127.0.0.1:9
+        - name: BACKUP_STATUS_URL
+          value: http://127.0.0.1:9
+        - name: NEWS_SERVICE_URL
+          value: http://127.0.0.1:9
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 384Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 2
+          failureThreshold: 30
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          periodSeconds: 5
+          timeoutSeconds: 2
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 2
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/portal
+        - name: tmp
+          mountPath: /tmp
+        command:
+        - /bin/sh
+        - -ec
+        args:
+        - |-
+          mkdir -p /var/lib/portal/files /var/lib/portal/auth /var/lib/portal/logs /var/lib/portal/portfolio
+          exec uvicorn app.main:app --host 0.0.0.0 --port 8000
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: portal-data
+      - name: tmp
+        emptyDir:
+          sizeLimit: 64Mi

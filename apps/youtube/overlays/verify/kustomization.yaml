@@ -1,0 +1,30 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: v2-verify
+resources:
+- ../../base
+labels:
+- pairs:
+    lab.personal-server-v2/environment: verify
+  includeSelectors: false
+  includeTemplates: true
+images:
+- name: localhost:5001/v2-youtube
+  newName: localhost:5001/v2-youtube
+  digest: sha256:f3ed0844b895c93c420780c95c5765ac4529a35214bfd8df551b6976d2e47fac
+patches:
+- patch: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: youtube
+    spec:
+      template:
+        spec:
+          containers:
+          - name: youtube
+            env:
+            - name: PORTAL_HOME_URL
+              value: http://127.0.0.1:8090
+            - name: V2_COOKIE_PREFIX
+              value: v2_verify_

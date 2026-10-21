@@ -131,72 +131,54 @@ prometheus:
         target_label: node
     prometheus-pushgateway:
       enabled: false
-  extraScrapeConfigs: |
-    - job_name: kube-state-metrics
-      static_configs:
-        - targets: ['prometheus-kube-state-metrics.v2-observability.svc.cluster.local:8080']
-    - job_name: argocd
-      static_configs:
-        - targets: ['argocd-application-controller-metrics.argocd.svc.cluster.local:8082']
-          labels: {component: application-controller}
-        - targets: ['argocd-server-metrics.argocd.svc.cluster.local:8083']
-          labels: {component: server}
-        - targets: ['argocd-repo-server-metrics.argocd.svc.cluster.local:8084']
-          labels: {component: repo-server}
-    - job_name: book-http
-      metrics_path: /probe
-      params:
-        module: [http_2xx]
-      static_configs:
-        - targets: ['http://book.v2-dev.svc.cluster.local:8003/ready']
-          labels: {environment: dev}
-        - targets: ['http://book.v2-verify.svc.cluster.local:8003/ready']
-          labels: {environment: verify}
-      relabel_configs:
-        - source_labels: [__address__]
-          target_label: __param_target
-        - source_labels: [__param_target]
-          target_label: instance
-        - target_label: __address__
-          replacement: blackbox.v2-observability.svc.cluster.local:9115
+  extraScrapeConfigs: "- job_name: kube-state-metrics\n  static_configs:\n  - targets:\n\
+    \    - prometheus-kube-state-metrics.v2-observability.svc.cluster.local:8080\n\
+    - job_name: argocd\n  static_configs:\n  - targets:\n    - argocd-application-controller-metrics.argocd.svc.cluster.local:8082\n\
+    \    labels:\n      component: application-controller\n  - targets:\n    - argocd-server-metrics.argocd.svc.cluster.local:8083\n\
+    \    labels:\n      component: server\n  - targets:\n    - argocd-repo-server-metrics.argocd.svc.cluster.local:8084\n\
+    \    labels:\n      component: repo-server\n- job_name: book-http\n  metrics_path:\
+    \ /probe\n  params:\n    module:\n    - http_2xx\n  static_configs:\n  - targets:\n\
+    \    - http://book.v2-dev.svc.cluster.local:8003/ready\n    labels:\n      environment:\
+    \ dev\n  - targets:\n    - http://book.v2-verify.svc.cluster.local:8003/ready\n\
+    \    labels:\n      environment: verify\n  relabel_configs:\n  - source_labels:\n\
+    \    - __address__\n    target_label: __param_target\n  - source_labels:\n   \
+    \ - __param_target\n    target_label: instance\n  - target_label: __address__\n\
+    \    replacement: blackbox.v2-observability.svc.cluster.local:9115\n- job_name:\
+    \ portal-http\n  metrics_path: /probe\n  params:\n    module:\n    - http_2xx\n\
+    \  static_configs:\n  - targets:\n    - http://portal.v2-dev.svc.cluster.local:8000/health\n\
+    \    labels:\n      environment: dev\n      service: portal\n      endpoint: health\n\
+    \  - targets:\n    - http://portal.v2-dev.svc.cluster.local:8000/ready\n    labels:\n\
+    \      environment: dev\n      service: portal\n      endpoint: ready\n  - targets:\n\
+    \    - http://portal.v2-verify.svc.cluster.local:8000/health\n    labels:\n  \
+    \    environment: verify\n      service: portal\n      endpoint: health\n  - targets:\n\
+    \    - http://portal.v2-verify.svc.cluster.local:8000/ready\n    labels:\n   \
+    \   environment: verify\n      service: portal\n      endpoint: ready\n  relabel_configs:\n\
+    \  - source_labels:\n    - __address__\n    target_label: __param_target\n  -\
+    \ source_labels:\n    - __param_target\n    target_label: instance\n  - target_label:\
+    \ __address__\n    replacement: blackbox.v2-observability.svc.cluster.local:9115\n\
+    - job_name: youtube-http\n  metrics_path: /probe\n  params:\n    module:\n   \
+    \ - http_2xx\n  static_configs:\n  - targets:\n    - http://youtube.v2-dev.svc.cluster.local:8002/health\n\
+    \    labels:\n      environment: dev\n      service: youtube\n      endpoint:\
+    \ health\n  - targets:\n    - http://youtube.v2-dev.svc.cluster.local:8002/ready\n\
+    \    labels:\n      environment: dev\n      service: youtube\n      endpoint:\
+    \ ready\n  - targets:\n    - http://youtube.v2-verify.svc.cluster.local:8002/health\n\
+    \    labels:\n      environment: verify\n      service: youtube\n      endpoint:\
+    \ health\n  - targets:\n    - http://youtube.v2-verify.svc.cluster.local:8002/ready\n\
+    \    labels:\n      environment: verify\n      service: youtube\n      endpoint:\
+    \ ready\n  relabel_configs:\n  - source_labels:\n    - __address__\n    target_label:\
+    \ __param_target\n  - source_labels:\n    - __param_target\n    target_label:\
+    \ instance\n  - target_label: __address__\n    replacement: blackbox.v2-observability.svc.cluster.local:9115\n"
   extraManifests:
-  - |
-    apiVersion: rbac.authorization.k8s.io/v1
-    kind: ClusterRole
-    metadata:
-      name: v2-prometheus-readonly
-      labels:
-        lab.personal-server-v2/owner: personal-server-v2
-    rules:
-    - apiGroups:
-      - ''
-      resources:
-      - nodes
-      verbs:
-      - get
-      - list
-      - watch
-    - apiGroups:
-      - ''
-      resources:
-      - nodes/metrics
-      verbs:
-      - get
-  - |
-    apiVersion: rbac.authorization.k8s.io/v1
-    kind: ClusterRoleBinding
-    metadata:
-      name: v2-prometheus-readonly
-      labels:
-        lab.personal-server-v2/owner: personal-server-v2
-    subjects:
-      - kind: ServiceAccount
-        name: v2-prometheus
-        namespace: v2-observability
-    roleRef:
-      apiGroup: rbac.authorization.k8s.io
-      kind: ClusterRole
-      name: v2-prometheus-readonly
+  - "apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name:\
+    \ v2-prometheus-readonly\n  labels:\n    lab.personal-server-v2/owner: personal-server-v2\n\
+    rules:\n- apiGroups:\n  - ''\n  resources:\n  - nodes\n  verbs:\n  - get\n  -\
+    \ list\n  - watch\n- apiGroups:\n  - ''\n  resources:\n  - nodes/metrics\n  verbs:\n\
+    \  - get\n"
+  - "apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRoleBinding\nmetadata:\n\
+    \  name: v2-prometheus-readonly\n  labels:\n    lab.personal-server-v2/owner:\
+    \ personal-server-v2\nsubjects:\n  - kind: ServiceAccount\n    name: v2-prometheus\n\
+    \    namespace: v2-observability\nroleRef:\n  apiGroup: rbac.authorization.k8s.io\n\
+    \  kind: ClusterRole\n  name: v2-prometheus-readonly\n"
   serverFiles:
     alerting_rules.yml:
       groups:
@@ -212,3 +194,25 @@ prometheus:
             summary: V2 Book /ready probe 실패
             description: Book HTTP 가용성 실패. Prometheus 내부 rule 상태만 제공하며 외부 알림 전달은 구성하지
               않음.
+      - name: v2-service-availability
+        rules:
+        - alert: V2PortalUnavailable
+          expr: probe_success{job="portal-http"} == 0
+          for: 30s
+          labels:
+            severity: warning
+            scope: v2-lab
+          annotations:
+            summary: V2 portal HTTP probe 실패
+            description: health/ready 상태와 Pod events·로그를 확인함. Prometheus 내부 rule이며
+              외부 알림 전달 구성은 아님.
+        - alert: V2YoutubeUnavailable
+          expr: probe_success{job="youtube-http"} == 0
+          for: 30s
+          labels:
+            severity: warning
+            scope: v2-lab
+          annotations:
+            summary: V2 youtube HTTP probe 실패
+            description: health/ready 상태와 Pod events·로그를 확인함. Prometheus 내부 rule이며
+              외부 알림 전달 구성은 아님.
