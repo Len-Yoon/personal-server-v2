@@ -1,0 +1,214 @@
+prometheus:
+  commonMetaLabels:
+    lab.personal-server-v2/owner: personal-server-v2
+  rbac:
+    create: false
+  serviceAccounts:
+    server:
+      name: v2-prometheus
+  alertmanager:
+    enabled: false
+  prometheus-node-exporter:
+    enabled: false
+  prometheus-pushgateway:
+    enabled: false
+  kube-state-metrics:
+    enabled: true
+    fullnameOverride: prometheus-kube-state-metrics
+    customLabels:
+      lab.personal-server-v2/owner: personal-server-v2
+    podLabels:
+      lab.personal-server-v2/owner: personal-server-v2
+    collectors:
+    - nodes
+    - namespaces
+    - pods
+    - deployments
+    - statefulsets
+    - daemonsets
+    - replicasets
+    - persistentvolumeclaims
+    - persistentvolumes
+    - resourcequotas
+    - limitranges
+    resources:
+      requests:
+        cpu: 25m
+        memory: 32Mi
+      limits:
+        cpu: 250m
+        memory: 128Mi
+  configmapReload:
+    prometheus:
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 100m
+          memory: 64Mi
+      containerSecurityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop:
+          - ALL
+  server:
+    fullnameOverride: prometheus
+    image:
+      tag: v3.15.0
+    podLabels:
+      lab.personal-server-v2/owner: personal-server-v2
+    nodeSelector:
+      kubernetes.io/hostname: k3d-ps-v2-agent-1
+    global:
+      scrape_interval: 15s
+      scrape_timeout: 5s
+      evaluation_interval: 15s
+    retention: 6h
+    retentionSize: 512MB
+    persistentVolume:
+      enabled: true
+      size: 2Gi
+      storageClass: local-path
+      annotations:
+        argocd.argoproj.io/sync-options: Prune=false,Delete=false
+      labels:
+        lab.personal-server-v2/owner: personal-server-v2
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: '1'
+        memory: 1Gi
+    securityContext:
+      runAsUser: 65534
+      runAsNonRoot: true
+      runAsGroup: 65534
+      fsGroup: 65534
+      seccompProfile:
+        type: RuntimeDefault
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+        - ALL
+    service:
+      type: ClusterIP
+      servicePort: 80
+  scrapeConfigs:
+    kubernetes-api-servers:
+      enabled: false
+    kubernetes-service-endpoints:
+      enabled: false
+    kubernetes-service-endpoints-slow:
+      enabled: false
+    kubernetes-services:
+      enabled: false
+    kubernetes-pods:
+      enabled: false
+    kubernetes-pods-slow:
+      enabled: false
+    kubernetes-nodes:
+      enabled: true
+      tls_config:
+        ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        insecure_skip_verify: false
+      relabel_configs:
+      - source_labels:
+        - __meta_kubernetes_node_name
+        target_label: node
+    kubernetes-nodes-cadvisor:
+      enabled: true
+      tls_config:
+        ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        insecure_skip_verify: false
+      relabel_configs:
+      - source_labels:
+        - __meta_kubernetes_node_name
+        target_label: node
+    prometheus-pushgateway:
+      enabled: false
+  extraScrapeConfigs: |
+    - job_name: kube-state-metrics
+      static_configs:
+        - targets: ['prometheus-kube-state-metrics.v2-observability.svc.cluster.local:8080']
+    - job_name: argocd
+      static_configs:
+        - targets: ['argocd-application-controller-metrics.argocd.svc.cluster.local:8082']
+          labels: {component: application-controller}
+        - targets: ['argocd-server-metrics.argocd.svc.cluster.local:8083']
+          labels: {component: server}
+        - targets: ['argocd-repo-server-metrics.argocd.svc.cluster.local:8084']
+          labels: {component: repo-server}
+    - job_name: book-http
+      metrics_path: /probe
+      params:
+        module: [http_2xx]
+      static_configs:
+        - targets: ['http://book.v2-dev.svc.cluster.local:8003/ready']
+          labels: {environment: dev}
+        - targets: ['http://book.v2-verify.svc.cluster.local:8003/ready']
+          labels: {environment: verify}
+      relabel_configs:
+        - source_labels: [__address__]
+          target_label: __param_target
+        - source_labels: [__param_target]
+          target_label: instance
+        - target_label: __address__
+          replacement: blackbox.v2-observability.svc.cluster.local:9115
+  extraManifests:
+  - |
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRole
+    metadata:
+      name: v2-prometheus-readonly
+      labels:
+        lab.personal-server-v2/owner: personal-server-v2
+    rules:
+    - apiGroups:
+      - ''
+      resources:
+      - nodes
+      verbs:
+      - get
+      - list
+      - watch
+    - apiGroups:
+      - ''
+      resources:
+      - nodes/metrics
+      verbs:
+      - get
+  - |
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRoleBinding
+    metadata:
+      name: v2-prometheus-readonly
+      labels:
+        lab.personal-server-v2/owner: personal-server-v2
+    subjects:
+      - kind: ServiceAccount
+        name: v2-prometheus
+        namespace: v2-observability
+    roleRef:
+      apiGroup: rbac.authorization.k8s.io
+      kind: ClusterRole
+      name: v2-prometheus-readonly
+  serverFiles:
+    alerting_rules.yml:
+      groups:
+      - name: v2-book-availability
+        rules:
+        - alert: V2BookUnavailable
+          expr: probe_success{job="book-http"} == 0
+          for: 30s
+          labels:
+            severity: warning
+            scope: v2-lab
+          annotations:
+            summary: V2 Book /ready probe 실패
+            description: Book HTTP 가용성 실패. Prometheus 내부 rule 상태만 제공하며 외부 알림 전달은 구성하지
+              않음.

@@ -1,0 +1,301 @@
+{
+  "id": null,
+  "uid": "v2-platform-lab",
+  "title": "V2 Platform Lab",
+  "schemaVersion": 41,
+  "version": 1,
+  "refresh": "15s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "tags": [
+    "V2",
+    "local-lab"
+  ],
+  "timezone": "browser",
+  "editable": false,
+  "description": "동일 맥북의 k3d 노드·Pod·Argo·Book HTTP probe 지표. HTTP probe 시간은 앱 고유 요청 latency/RPS를 뜻하지 않음.",
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Book /ready 가용성 (1=성공)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "v2-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bool"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "probe_success{job=\"book-http\"}",
+          "legendFormat": "{{environment}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Book HTTP probe 소요 시간",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "v2-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "probe_duration_seconds{job=\"book-http\"}",
+          "legendFormat": "{{environment}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "V2 Pod 메모리 (working set)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "v2-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (namespace,pod) (container_memory_working_set_bytes{namespace=~\"v2-dev|v2-verify|v2-observability|argocd\",container!=\"\",container!=\"POD\"})",
+          "legendFormat": "{{namespace}} {{pod}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "V2 Pod CPU 사용량 (cores)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "v2-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cores"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (namespace,pod) (rate(container_cpu_usage_seconds_total{namespace=~\"v2-dev|v2-verify|v2-observability|argocd\",container!=\"\",container!=\"POD\"}[2m]))",
+          "legendFormat": "{{namespace}} {{pod}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "사용 가능한 Deployment replica",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "v2-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "kube_deployment_status_replicas_available{namespace=~\"v2-dev|v2-verify|v2-observability|argocd\"}",
+          "legendFormat": "{{namespace}} / {{deployment}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Argo Application 상태 (labels에 sync/health 표시)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "v2-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "argocd_app_info",
+          "legendFormat": "{{name}} / {{sync_status}} / {{health_status}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "k3d 노드별 Pod 메모리 합계 (물리 Mac 지표 아님)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "v2-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (node) (container_memory_working_set_bytes{container!=\"\",container!=\"POD\"})",
+          "legendFormat": "{{node}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "stat",
+      "title": "Ready k3d 노드 수",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "v2-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(kube_node_status_condition{condition=\"Ready\",status=\"true\"})",
+          "legendFormat": "Ready nodes",
+          "range": true
+        }
+      ]
+    }
+  ]
+}

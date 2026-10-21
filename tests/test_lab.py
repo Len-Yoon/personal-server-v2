@@ -96,10 +96,17 @@ class GuardTests(unittest.TestCase):
                'operation': {'sync': {'revision': revision}, 'info': [{'name': 'v2-request', 'value': 'old'}]}}}}
         new = {'status': {'operationState': {'phase': 'Succeeded',
                'operation': {'sync': {'revision': revision}, 'info': [{'name': 'v2-request', 'value': 'new'}]}}}}
-        responses = iter(['patched', json.dumps(old), json.dumps(new), 'rolled out'])
-        with patch.object(lab, 'guard'), patch.object(lab, 'application_guard', return_value=old), patch.object(lab.secrets, 'token_hex', return_value='new'), patch.object(lab.time, 'sleep'), patch.object(lab, 'k', side_effect=lambda *a, **kw: next(responses)) as k:
+        responses = iter(['patched', 'rolled out'])
+        with patch.object(lab, 'guard'), patch.object(lab, 'application_guard', side_effect=[old, old, new]) as get_app, patch.object(lab.secrets, 'token_hex', return_value='new'), patch.object(lab.time, 'sleep'), patch.object(lab, 'k', side_effect=lambda *a, **kw: next(responses)) as k:
             lab.sync(SimpleNamespace(environment='verify', revision=revision))
-            self.assertEqual(k.call_count, 4)
+            self.assertEqual(k.call_count, 2)
+            self.assertEqual(get_app.call_count, 3)
+
+    def test_deploy_uses_argo_and_not_workload_apply(self):
+        with patch.object(lab, 'credentials'), patch.object(lab, 'sync') as sync, patch.object(lab, 'k') as k:
+            lab.deploy(SimpleNamespace(revision='a' * 40))
+            self.assertEqual([c.args[0].environment for c in sync.call_args_list], ['dev', 'verify'])
+            k.assert_not_called()
 
     def test_cleanup_can_resume_with_missing_container(self):
         data = {'containers': {'deleted': 'gone-id', 'remaining': 'our-id'}, 'network': None, 'volumes': {}}

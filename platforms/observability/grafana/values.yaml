@@ -1,0 +1,95 @@
+grafana:
+  fullnameOverride: grafana
+  extraLabels:
+    lab.personal-server-v2/owner: personal-server-v2
+  podLabels:
+    lab.personal-server-v2/owner: personal-server-v2
+  automountServiceAccountToken: false
+  replicas: 1
+  deploymentStrategy:
+    type: Recreate
+  nodeSelector:
+    kubernetes.io/hostname: k3d-ps-v2-agent-1
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  service:
+    type: ClusterIP
+    port: 80
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClassName: local-path
+    lookupVolumeName: false
+    annotations:
+      argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    extraPvcLabels:
+      lab.personal-server-v2/owner: personal-server-v2
+  initChownData:
+    enabled: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 384Mi
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 472
+    runAsGroup: 472
+    fsGroup: 472
+    seccompProfile:
+      type: RuntimeDefault
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    privileged: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+      - ALL
+    seccompProfile:
+      type: RuntimeDefault
+  testFramework:
+    enabled: false
+  grafana.ini:
+    server:
+      domain: localhost
+      root_url: http://localhost:8083
+    analytics:
+      check_for_updates: false
+      reporting_enabled: false
+    auth.anonymous:
+      enabled: false
+    users:
+      allow_sign_up: false
+    log:
+      mode: console
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+      - name: Prometheus
+        uid: v2-prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus.v2-observability.svc.cluster.local
+        isDefault: true
+        editable: false
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+      - name: v2-lab
+        orgId: 1
+        folder: V2 Lab
+        type: file
+        disableDeletion: true
+        editable: false
+        options:
+          path: /var/lib/grafana/dashboards/v2-lab
+  dashboardsConfigMaps:
+    v2-lab: grafana-v2-lab-dashboard
+  rbac:
+    create: false

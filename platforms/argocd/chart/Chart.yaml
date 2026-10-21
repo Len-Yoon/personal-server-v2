@@ -1,0 +1,9 @@
+apiVersion: v2
+name: argo-platform
+description: V2 로컬 Argo CD bootstrap 및 self-management 공용 chart
+type: application
+version: 0.1.0
+dependencies:
+  - name: argo-cd
+    version: 10.10.5
+    repository: https://argoproj.github.io/argo-helm

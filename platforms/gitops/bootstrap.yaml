@@ -1,0 +1,44 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: v2-root
+  namespace: argocd
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+spec:
+  description: V2 서비스 Application 선언과 namespace의 관리자 전용 진입점
+  sourceRepos:
+    - ssh://git@github.com/Len-Yoon/personal-server-v2.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: argocd
+  # Namespace 이름은 AppProject로 제한할 수 없어 CLI와 정적 검사로 별도 제한함.
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: argoproj.io
+      kind: Application
+    - group: argoproj.io
+      kind: AppProject
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: v2-root
+  namespace: argocd
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+spec:
+  project: v2-root
+  source:
+    repoURL: ssh://git@github.com/Len-Yoon/personal-server-v2.git
+    targetRevision: main
+    path: platforms/gitops/root
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  # 자동 동기화와 삭제 연동 finalizer를 두지 않음. 동기화는 명시적 수동 실행임.
+  syncPolicy:
+    syncOptions:
+      - FailOnSharedResource=true

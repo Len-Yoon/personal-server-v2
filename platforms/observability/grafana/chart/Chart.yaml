@@ -1,0 +1,9 @@
+apiVersion: v2
+name: v2-grafana
+description: V2 관측 대시보드용 고정 Grafana chart wrapper
+type: application
+version: 0.1.0
+dependencies:
+  - name: grafana
+    version: 14.0.1
+    repository: https://grafana-community.github.io/helm-charts
