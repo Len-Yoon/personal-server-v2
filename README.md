@@ -6,7 +6,7 @@
 |---|---|---|
 | V1 | [personal-server](https://github.com/Len-Yoon/personal-server)의 실제 서비스 운영·유지보수 | 기존 저장소·운영 구성 보존 |
 | V2 | 맥북 로컬 Kubernetes 운영 실습 | V1 전체 복제·즉시 대체 아님 |
-| 현재 상태 | 로컬 k3d·Book·GitOps·장애 실습 구현·검증 | 사용자 직접 진단 및 후속 단계는 별도 |
+| 현재 상태 | root/self·Book·관측 서비스 GitOps 관리 및 지표 검증 완료 | Loki·trace는 후속 |
 | 운영 보호 | N100 접속·동기화·이미지 반입·배포·운영 데이터 사용 제외 | 별도 명시 승인 전 금지 |
 
 ## 개발 방향
@@ -15,7 +15,7 @@
 
 첫 개발 범위는 별도 k3d, 개발/검증 namespace, Kustomize, Argo CD, 자원·배포·스케줄링 장애 실습임. 승인된 설계에 따라 명세·실행 도구를 구현함.
 
-[개발 계획](docs/20261021_V2_개발계획.md) · [로컬 실습 가이드](docs/20261021_V2_로컬실습_운영가이드.md) · [검증 기록](docs/20261021_V2_검증기록.md) · [에이전트 작업 기준](AGENTS.md)
+[개발 계획](docs/20261021_V2_개발계획.md) · [로컬 실습 가이드](docs/20261021_V2_로컬실습_운영가이드.md) · [검증 기록](docs/20261021_V2_검증기록.md) · [GitOps·관측 기록](docs/20261021_V2_GitOps전환_지표관측_검증기록.md) · [에이전트 작업 기준](AGENTS.md)
 
 ## localhost 접속
 
@@ -28,8 +28,10 @@ python3 tools/lab.py serve
 | Book 개발 | http://localhost:8080 | 쓰기 비밀번호 .local/dev-password |
 | Book 검증 | http://localhost:8081 | 쓰기 비밀번호 .local/verify-password |
 | Argo CD | https://localhost:8082 | admin / .local/argocd-password, 자체 서명 인증서 |
+| Grafana | http://localhost:8083/d/v2-platform-lab | admin / .local/grafana-password |
+| Prometheus | http://localhost:8084 | 지표·targets·내부 alert 조회 |
 
-최초 설치·이미지 빌드·배포는 로컬 실습 가이드에 따름. 포워딩 프로세스를 유지해야 접속 가능하며 localhost 주소만 입력해서 클러스터가 자동 시작되지는 않음. 비밀번호 파일 내용은 Git·로그에 기록하지 않음.
+정상 배포는 `lab.py gitops` 또는 `lab.py sync`로 수행함. 기존 Argo에 Helm upgrade를 반복하지 않음. 최초 설치·이미지 빌드·배포는 로컬 실습 가이드에 따름. 포워딩 프로세스를 유지해야 접속 가능하며 localhost 주소만 입력해서 클러스터가 자동 시작되지는 않음. 비밀번호 파일 내용은 Git·로그에 기록하지 않음.
 
 ## 검증과 현재 한계
 

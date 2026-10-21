@@ -61,7 +61,11 @@ def verify(run_fault=False):
         report['grafana'] = {'dashboard_uid': dashboard['uid'], 'panels': len(dashboard['panels']), 'datasource_health': 'OK'}
         checks = {}
         for resource in ('nodes/metrics', 'nodes/proxy', 'secrets'):
-            checks[resource] = lab.k('auth', 'can-i', 'get', resource, '--as=system:serviceaccount:v2-observability:v2-prometheus', check=False).strip()
+            kind, _, subresource = resource.partition('/')
+            args = ['auth', 'can-i', 'get', kind, '--as=system:serviceaccount:v2-observability:v2-prometheus']
+            if subresource:
+                args.append('--subresource=' + subresource)
+            checks[resource] = lab.k(*args, check=False).strip()
         assert checks == {'nodes/metrics': 'yes', 'nodes/proxy': 'no', 'secrets': 'no'}, checks
         report['rbac'] = checks
         if run_fault:
