@@ -1,0 +1,40 @@
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: ps-v2
+servers: 1
+agents: 2
+image: rancher/k3s:v1.35.5-k3s1
+network: ps-v2
+kubeAPI:
+  host: "127.0.0.1"
+  hostIP: "127.0.0.1"
+  hostPort: "6550"
+registries:
+  config: |
+    mirrors:
+      "localhost:5001":
+        endpoint:
+          - "http://ps-v2-registry:5000"
+options:
+  k3d:
+    wait: true
+    timeout: 180s
+  kubeconfig:
+    updateDefaultKubeconfig: false
+    switchCurrentContext: false
+  k3s:
+    extraArgs:
+      - arg: --disable=traefik
+        nodeFilters: ["server:*"]
+      - arg: --disable=servicelb
+        nodeFilters: ["server:*"]
+    nodeLabels:
+      - label: lab.personal-server-v2/owner=personal-server-v2
+        nodeFilters: ["server:*", "agent:*"]
+  runtime:
+    serversMemory: 2g
+    agentsMemory: 3g
+    labels:
+      - label: lab.personal-server-v2/owner=personal-server-v2
+        nodeFilters: ["server:*", "agent:*", "loadbalancer"]
