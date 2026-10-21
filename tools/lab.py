@@ -398,7 +398,7 @@ def preflight_root(revision):
     if run(['git', 'rev-parse', 'HEAD']).strip() != revision or run(['git', 'status', '--porcelain', '--', 'platforms']).strip():
         raise RuntimeError('root sync는 검토할 SHA로 checkout하고 platforms 변경을 커밋한 상태에서 실행해야 함')
     rendered = k('kustomize', 'platforms/gitops/root')
-    objects = json.loads(k('create', '--dry-run=client', '--validate=false', '-f', '-', '-o', 'json', stdin=rendered))['items']
+    objects = decode_objects(k('create', '--dry-run=client', '--validate=false', '-f', '-', '-o', 'json', stdin=rendered))
     allowed = {'Namespace': {'argocd', 'v2-dev', 'v2-verify', 'v2-observability'},
                'Application': {data[0] for key, data in APPLICATIONS.items() if key != 'root'},
                'AppProject': {'book-dev', 'book-verify', 'argocd-platform', 'observability'}}
@@ -605,7 +605,7 @@ def recover(args):
     if hashlib.sha256(archive.read_bytes()).hexdigest() != lock['argocd_chart_sha256']:
         raise RuntimeError('복구 chart checksum 불일치')
     rendered = run(['helm', 'template', 'argocd', ROOT / 'platforms/argocd/chart', '-n', 'argocd', '-f', 'platforms/argocd/values.yaml'])
-    objects = json.loads(k('create', '--dry-run=client', '--validate=false', '-f', '-', '-o', 'json', stdin=rendered))['items']
+    objects = decode_objects(k('create', '--dry-run=client', '--validate=false', '-f', '-', '-o', 'json', stdin=rendered))
     allowed = {'ServiceAccount', 'ConfigMap', 'Service', 'Deployment', 'StatefulSet', 'Role', 'RoleBinding', 'ClusterRole', 'ClusterRoleBinding', 'CustomResourceDefinition', 'NetworkPolicy'}
     for obj in objects:
         kind, meta = obj['kind'], obj['metadata']
@@ -634,6 +634,20 @@ def recover(args):
 
 def objects_to_list(objects):
     return {'apiVersion': 'v1', 'kind': 'List', 'items': objects}
+
+
+def decode_objects(output):
+    """kubectl multi-document JSON은 버전에 따라 List 또는 연속 JSON 객체임."""
+    decoder = json.JSONDecoder()
+    objects = []
+    remaining = output.lstrip()
+    while remaining:
+        obj, end = decoder.raw_decode(remaining)
+        objects.extend(obj['items'] if obj.get('kind') == 'List' else [obj])
+        remaining = remaining[end:].lstrip()
+    if not objects:
+        raise RuntimeError('비어 있는 렌더 결과')
+    return objects
 
 
 def main():

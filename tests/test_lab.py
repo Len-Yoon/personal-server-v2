@@ -17,6 +17,10 @@ spec.loader.exec_module(lab)
 
 
 class GuardTests(unittest.TestCase):
+    def test_multi_resource_json_accepts_list_and_stream(self):
+        objects = [{'kind': 'Namespace', 'metadata': {'name': 'v2-dev'}}, {'kind': 'Application', 'metadata': {'name': 'book-dev'}}]
+        self.assertEqual(lab.decode_objects('\n'.join(json.dumps(o) for o in objects)), objects)
+        self.assertEqual(lab.decode_objects(json.dumps({'kind': 'List', 'items': objects})), objects)
     def config(self):
         return {'contexts': [{'name': lab.CONTEXT, 'context': {'cluster': 'v2', 'user': 'v2'}}],
                 'clusters': [{'name': 'v2', 'cluster': {'server': 'https://127.0.0.1:6550', 'certificate-authority-data': 'v2-ca'}}],
