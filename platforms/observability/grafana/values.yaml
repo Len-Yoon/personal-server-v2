@@ -77,6 +77,15 @@ grafana:
         url: http://prometheus.v2-observability.svc.cluster.local
         isDefault: true
         editable: false
+      - name: Loki
+        uid: v2-loki
+        type: loki
+        access: proxy
+        url: http://loki.v2-observability.svc.cluster.local:3100
+        isDefault: false
+        editable: false
+        jsonData:
+          maxLines: 1000
   dashboardProviders:
     dashboardproviders.yaml:
       apiVersion: 1

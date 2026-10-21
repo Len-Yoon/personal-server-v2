@@ -11,8 +11,8 @@ spec:
     requests.memory: 2Gi
     limits.cpu: "4"
     limits.memory: 3Gi
-    requests.storage: 4Gi
-    persistentvolumeclaims: "3"
+    requests.storage: 8Gi
+    persistentvolumeclaims: "6"
     pods: "12"
 ---
 apiVersion: v1

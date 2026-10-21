@@ -1,0 +1,155 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: v2-alloy-logs
+  namespace: v2-dev
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ''
+  resources:
+  - pods/log
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: v2-alloy-logs
+  namespace: v2-dev
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+subjects:
+- kind: ServiceAccount
+  name: v2-alloy
+  namespace: v2-observability
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: v2-alloy-logs
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: v2-alloy-logs
+  namespace: v2-verify
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ''
+  resources:
+  - pods/log
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: v2-alloy-logs
+  namespace: v2-verify
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+subjects:
+- kind: ServiceAccount
+  name: v2-alloy
+  namespace: v2-observability
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: v2-alloy-logs
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: v2-alloy-logs
+  namespace: argocd
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ''
+  resources:
+  - pods/log
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: v2-alloy-logs
+  namespace: argocd
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+subjects:
+- kind: ServiceAccount
+  name: v2-alloy
+  namespace: v2-observability
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: v2-alloy-logs
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: v2-alloy-logs
+  namespace: v2-observability
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ''
+  resources:
+  - pods/log
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: v2-alloy-logs
+  namespace: v2-observability
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+subjects:
+- kind: ServiceAccount
+  name: v2-alloy
+  namespace: v2-observability
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: v2-alloy-logs

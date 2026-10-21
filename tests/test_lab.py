@@ -112,6 +112,31 @@ class GuardTests(unittest.TestCase):
             self.assertEqual([c.args[0].environment for c in sync.call_args_list], ['dev', 'verify'])
             k.assert_not_called()
 
+    def test_logging_preflight_rejects_wrong_namespace_or_kind(self):
+        for kind, name, namespace in [('Role', 'v2-alloy-logs', 'kube-system'),
+                                      ('ClusterRole', 'v2-alloy-logs', 'v2-observability'),
+                                      ('Secret', 'v2-alloy', 'v2-observability')]:
+            with self.subTest(kind=kind, namespace=namespace):
+                obj = {'kind': kind, 'metadata': {'name': name, 'namespace': namespace, 'labels': {lab.OWNER: lab.VALUE}}}
+                with patch.object(lab, 'run', side_effect=['a' * 40, '']), patch.object(lab, 'k', side_effect=['rendered', json.dumps(obj)]), patch.object(lab, 'namespace_guard') as guard, patch.object(lab, 'refuse_foreign') as foreign:
+                    with self.assertRaisesRegex(RuntimeError, '불일치'):
+                        lab.preflight_logging('alloy', 'a' * 40)
+                    guard.assert_not_called()
+                    foreign.assert_not_called()
+
+    def test_logging_preflight_refuses_existing_foreign_resource(self):
+        obj = {'kind': 'Role', 'metadata': {'name': 'v2-alloy-logs', 'namespace': 'v2-dev', 'labels': {lab.OWNER: lab.VALUE}}}
+        with patch.object(lab, 'run', side_effect=['a' * 40, '']), patch.object(lab, 'k', side_effect=['rendered', json.dumps(obj)]), patch.object(lab, 'namespace_guard'), patch.object(lab, 'refuse_foreign', side_effect=RuntimeError('타 소유 자원')) as foreign:
+            with self.assertRaisesRegex(RuntimeError, '타 소유'):
+                lab.preflight_logging('alloy', 'a' * 40)
+            foreign.assert_called_once_with('Role', 'v2-alloy-logs', 'v2-dev')
+
+    def test_logging_preflight_requires_committed_matching_sha(self):
+        with patch.object(lab, 'run', return_value='b' * 40), patch.object(lab, 'k') as k:
+            with self.assertRaisesRegex(RuntimeError, 'SHA'):
+                lab.preflight_logging('alloy', 'a' * 40)
+            k.assert_not_called()
+
     def test_existing_argo_bootstrap_never_calls_helm(self):
         def k(*args, **kwargs):
             if 'deployment' in args:

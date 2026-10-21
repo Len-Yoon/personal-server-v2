@@ -1,0 +1,211 @@
+{
+  "id": null,
+  "uid": "v2-logs",
+  "title": "V2 Logs",
+  "schemaVersion": 41,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "tags": [
+    "V2",
+    "logs"
+  ],
+  "timezone": "browser",
+  "editable": false,
+  "description": "V2 소유 Pod 표준 로그. 관리자 인증으로 조회하며 미수집 파일 로그·호스트 로그는 포함하지 않음.",
+  "links": [
+    {
+      "title": "V2 지표 대시보드",
+      "type": "link",
+      "url": "/d/v2-platform-lab"
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "environment",
+        "label": "환경",
+        "type": "query",
+        "datasource": {
+          "type": "loki",
+          "uid": "v2-loki"
+        },
+        "query": {
+          "label": "environment",
+          "refId": "LokiVariableQueryEditor-VariableQuery",
+          "stream": "{cluster=\"ps-v2\"}",
+          "type": 1
+        },
+        "refresh": 1,
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": []
+      },
+      {
+        "name": "namespace",
+        "label": "namespace",
+        "type": "query",
+        "datasource": {
+          "type": "loki",
+          "uid": "v2-loki"
+        },
+        "query": {
+          "label": "namespace",
+          "refId": "LokiVariableQueryEditor-VariableQuery",
+          "stream": "{cluster=\"ps-v2\"}",
+          "type": 1
+        },
+        "refresh": 1,
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": []
+      },
+      {
+        "name": "service",
+        "label": "서비스",
+        "type": "query",
+        "datasource": {
+          "type": "loki",
+          "uid": "v2-loki"
+        },
+        "query": {
+          "label": "service",
+          "refId": "LokiVariableQueryEditor-VariableQuery",
+          "stream": "{cluster=\"ps-v2\"}",
+          "type": 1
+        },
+        "refresh": 1,
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": []
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "서비스별 로그 발생량",
+      "type": "timeseries",
+      "datasource": {
+        "type": "loki",
+        "uid": "v2-loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "v2-loki"
+          },
+          "expr": "sum by (namespace, service) (count_over_time({cluster=\"ps-v2\",environment=~\"$environment\",namespace=~\"$namespace\",service=~\"$service\"}[1m]))",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "서비스 로그",
+      "type": "logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "v2-loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 24,
+        "h": 12
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "v2-loki"
+          },
+          "expr": "{cluster=\"ps-v2\",environment=~\"$environment\",namespace=~\"$namespace\",service=~\"$service\"}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true
+      }
+    },
+    {
+      "id": 3,
+      "title": "오류 관련 로그",
+      "type": "logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "v2-loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 24,
+        "h": 12
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "v2-loki"
+          },
+          "expr": "{cluster=\"ps-v2\",environment=~\"$environment\",namespace=~\"$namespace\",service=~\"$service\"} |~ `(?i)error|exception|traceback|fatal|HTTP/[0-9.]+\" [45][0-9]{2}`",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true
+      }
+    }
+  ]
+}
