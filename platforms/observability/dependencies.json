@@ -1,0 +1,19 @@
+{
+  "prometheus": {
+    "chart": "29.37.0",
+    "app": "v3.15.0",
+    "repository": "https://prometheus-community.github.io/helm-charts",
+    "file": "prometheus/chart/charts/prometheus-29.37.0.tgz",
+    "sha256": "df07dce99f49ea300c5bb8dadb167a09141bb7dbdc6609727157677434e4fbe5"
+  },
+  "grafana": {
+    "chart": "14.0.1",
+    "app": "13.2.4",
+    "repository": "https://grafana-community.github.io/helm-charts",
+    "file": "grafana/chart/charts/grafana-14.0.1.tgz",
+    "sha256": "4dbc6ed68ee29e78edd4db47d10aad72f8fc473e4169501a2bdaf149463e74df"
+  },
+  "blackbox": {
+    "image": "quay.io/prometheus/blackbox-exporter:v0.29.0@sha256:9613f2884689b6fad9f1939f6a3b0388c93a022cfaededb19545b329b5c83dea"
+  }
+}

@@ -1,0 +1,9 @@
+apiVersion: v2
+name: v2-prometheus
+description: V2 지표 수집용 고정 Prometheus chart wrapper
+type: application
+version: 0.1.0
+dependencies:
+  - name: prometheus
+    version: 29.37.0
+    repository: https://prometheus-community.github.io/helm-charts

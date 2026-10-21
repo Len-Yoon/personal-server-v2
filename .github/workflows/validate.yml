@@ -21,9 +21,8 @@ jobs:
           echo "$GITHUB_WORKSPACE" >> "$GITHUB_PATH"
       - name: 안전 경계 및 배포 계약
         run: python3 -m unittest discover -s tests -v
-      - name: Argo CD chart checksum 및 렌더링
+      - name: Bootstrap 및 self chart 렌더링
         run: |
-          curl -fsSLo /tmp/argocd.tgz https://github.com/argoproj/argo-helm/releases/download/argo-cd-10.10.5/argo-cd-10.10.5.tgz
-          echo 'ba6447eeed42bc41d1f0527721047b236304e97669a7b6286d02be4a1644ba7a  /tmp/argocd.tgz' | sha256sum --check
-          helm template argocd /tmp/argocd.tgz -n argocd -f platforms/argocd/values.yaml > /tmp/argocd.yaml
+          helm template argocd platforms/argocd/chart -n argocd -f platforms/argocd/values.yaml > /tmp/argocd-self.yaml
+          helm template argocd platforms/argocd/chart -n argocd -f platforms/argocd/values.yaml --set argo-cd.configs.secret.createSecret=true --set argo-cd.redisSecretInit.enabled=true > /tmp/argocd-bootstrap.yaml
       # 클러스터 생성·배포·자격 증명 접근은 이 workflow의 범위가 아님.

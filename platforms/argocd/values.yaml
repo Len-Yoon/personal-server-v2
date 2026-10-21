@@ -1,57 +1,74 @@
-# argo-cd chart 10.10.5 / Argo CD v3.5.5 고정. 업그레이드는 명시적으로 수행함.
-global:
-  domain: localhost
-  additionalLabels:
-    lab.personal-server-v2/owner: personal-server-v2
-  revisionHistoryLimit: 2
-  image:
-    tag: v3.5.5
-configs:
-  cm:
-    url: https://localhost:8082
-    exec.enabled: false
-    admin.enabled: true
-  params:
-    server.insecure: false
-  rbac:
-    policy.default: ""
-controller:
-  replicas: 1
-  resources:
-    requests: {cpu: 100m, memory: 256Mi}
-    limits: {cpu: "1", memory: 768Mi}
-repoServer:
-  replicas: 1
-  resources:
-    requests: {cpu: 100m, memory: 128Mi}
-    limits: {cpu: "1", memory: 512Mi}
-server:
-  replicas: 1
-  service:
-    type: ClusterIP
-  ingress:
+# Bootstrap와 Argo CD self-management가 공유하는 단일 values 원본임.
+argo-cd:
+  # argo-cd chart 10.10.5 / Argo CD v3.5.5 고정. 업그레이드는 명시적으로 수행함.
+  crds:
+    additionalLabels:
+      lab.personal-server-v2/owner: personal-server-v2
+  global:
+    domain: localhost
+    additionalLabels:
+      lab.personal-server-v2/owner: personal-server-v2
+    revisionHistoryLimit: 2
+    image:
+      tag: v3.5.5
+  configs:
+    secret:
+      # 최초 bootstrap에서만 생성함. 관리자 비밀번호/TLS 값은 Git에서 관리하지 않음.
+      createSecret: false
+    cm:
+      url: https://localhost:8082
+      exec.enabled: false
+      admin.enabled: true
+      application.resourceTrackingMethod: annotation
+    params:
+      server.insecure: false
+    rbac:
+      policy.default: ""
+  controller:
+    replicas: 1
+    metrics:
+      enabled: true
+    resources:
+      requests: {cpu: 100m, memory: 256Mi}
+      limits: {cpu: "1", memory: 768Mi}
+  repoServer:
+    replicas: 1
+    metrics:
+      enabled: true
+    resources:
+      requests: {cpu: 100m, memory: 128Mi}
+      limits: {cpu: "1", memory: 512Mi}
+  server:
+    replicas: 1
+    metrics:
+      enabled: true
+    service:
+      type: ClusterIP
+    ingress:
+      enabled: false
+    resources:
+      requests: {cpu: 50m, memory: 128Mi}
+      limits: {cpu: 500m, memory: 384Mi}
+  redis:
+    enabled: true
+    resources:
+      requests: {cpu: 50m, memory: 64Mi}
+      limits: {cpu: 250m, memory: 256Mi}
+  redis-ha:
     enabled: false
-  resources:
-    requests: {cpu: 50m, memory: 128Mi}
-    limits: {cpu: 500m, memory: 384Mi}
-redis:
-  enabled: true
-  resources:
-    requests: {cpu: 50m, memory: 64Mi}
-    limits: {cpu: 250m, memory: 256Mi}
-redis-ha:
-  enabled: false
-redisSecretInit:
-  resources:
-    requests: {cpu: 50m, memory: 64Mi}
-    limits: {cpu: 250m, memory: 256Mi}
-dex:
-  enabled: false
-applicationSet:
-  # 이 chart는 enabled 스위치 없이 Deployment를 생성하므로 실행 수를 0으로 둠.
-  replicas: 0
-  resources:
-    requests: {cpu: 50m, memory: 64Mi}
-    limits: {cpu: 250m, memory: 256Mi}
-notifications:
-  enabled: false
+  redisSecretInit:
+    # 최초 bootstrap에서만 실행함. 생성된 argocd-redis Secret은 별도 보존함.
+    enabled: false
+    resources:
+      requests: {cpu: 50m, memory: 64Mi}
+      limits: {cpu: 250m, memory: 256Mi}
+  dex:
+    enabled: false
+  applicationSet:
+    # 이 chart는 enabled 스위치 없이 Deployment를 생성하므로 실행 수를 0으로 둠.
+    replicas: 0
+    resources:
+      requests: {cpu: 50m, memory: 64Mi}
+      limits: {cpu: 250m, memory: 256Mi}
+  notifications:
+    enabled: false

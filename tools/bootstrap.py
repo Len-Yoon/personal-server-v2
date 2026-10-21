@@ -31,7 +31,7 @@ def main():
     (ROOT / '.local').chmod(0o700)
     download(f'https://github.com/k3d-io/k3d/releases/download/{LOCK["k3d"]}/k3d-darwin-arm64', ROOT / '.tools/bin/k3d', LOCK['k3d_darwin_arm64_sha256'])
     download(f'https://dl.k8s.io/release/{LOCK["kubectl"]}/bin/darwin/arm64/kubectl', ROOT / '.tools/bin/kubectl', LOCK['kubectl_darwin_arm64_sha256'])
-    download(f'https://github.com/argoproj/argo-helm/releases/download/argo-cd-10.10.5/{LOCK["argocd_chart_file"]}', ROOT / '.local/cache' / LOCK['argocd_chart_file'], LOCK['argocd_chart_sha256'])
+    download(f'https://github.com/argoproj/argo-helm/releases/download/argo-cd-10.10.5/{LOCK["argocd_chart_file"]}', ROOT / 'platforms/argocd/chart/charts' / LOCK['argocd_chart_file'], LOCK['argocd_chart_sha256'])
     for name in ('k3d', 'kubectl'):
         (ROOT / '.tools/bin' / name).chmod(0o755)
     print('공식 배포 도구/checksum 검증 PASS. 추가 필요: Python3, Docker/OrbStack, Helm')

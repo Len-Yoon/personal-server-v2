@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: observability-budget
+  namespace: v2-observability
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: 2Gi
+    limits.cpu: "4"
+    limits.memory: 3Gi
+    requests.storage: 4Gi
+    persistentvolumeclaims: "3"
+    pods: "12"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: observability-defaults
+  namespace: v2-observability
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+spec:
+  limits:
+    - type: Container
+      defaultRequest: {cpu: 50m, memory: 64Mi}
+      default: {cpu: 500m, memory: 256Mi}
+      max: {cpu: "2", memory: 1536Mi}

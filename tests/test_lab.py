@@ -17,6 +17,10 @@ spec.loader.exec_module(lab)
 
 
 class GuardTests(unittest.TestCase):
+    def test_multi_resource_json_accepts_list_and_stream(self):
+        objects = [{'kind': 'Namespace', 'metadata': {'name': 'v2-dev'}}, {'kind': 'Application', 'metadata': {'name': 'book-dev'}}]
+        self.assertEqual(lab.decode_objects('\n'.join(json.dumps(o) for o in objects)), objects)
+        self.assertEqual(lab.decode_objects(json.dumps({'kind': 'List', 'items': objects})), objects)
     def config(self):
         return {'contexts': [{'name': lab.CONTEXT, 'context': {'cluster': 'v2', 'user': 'v2'}}],
                 'clusters': [{'name': 'v2', 'cluster': {'server': 'https://127.0.0.1:6550', 'certificate-authority-data': 'v2-ca'}}],
@@ -96,10 +100,29 @@ class GuardTests(unittest.TestCase):
                'operation': {'sync': {'revision': revision}, 'info': [{'name': 'v2-request', 'value': 'old'}]}}}}
         new = {'status': {'operationState': {'phase': 'Succeeded',
                'operation': {'sync': {'revision': revision}, 'info': [{'name': 'v2-request', 'value': 'new'}]}}}}
-        responses = iter(['patched', json.dumps(old), json.dumps(new), 'rolled out'])
-        with patch.object(lab, 'guard'), patch.object(lab, 'application_guard', return_value=old), patch.object(lab.secrets, 'token_hex', return_value='new'), patch.object(lab.time, 'sleep'), patch.object(lab, 'k', side_effect=lambda *a, **kw: next(responses)) as k:
+        responses = iter(['patched', 'rolled out'])
+        with patch.object(lab, 'guard'), patch.object(lab, 'application_guard', side_effect=[old, old, new]) as get_app, patch.object(lab.secrets, 'token_hex', return_value='new'), patch.object(lab.time, 'sleep'), patch.object(lab, 'k', side_effect=lambda *a, **kw: next(responses)) as k:
             lab.sync(SimpleNamespace(environment='verify', revision=revision))
-            self.assertEqual(k.call_count, 4)
+            self.assertEqual(k.call_count, 2)
+            self.assertEqual(get_app.call_count, 3)
+
+    def test_deploy_uses_argo_and_not_workload_apply(self):
+        with patch.object(lab, 'credentials'), patch.object(lab, 'sync') as sync, patch.object(lab, 'k') as k:
+            lab.deploy(SimpleNamespace(revision='a' * 40))
+            self.assertEqual([c.args[0].environment for c in sync.call_args_list], ['dev', 'verify'])
+            k.assert_not_called()
+
+    def test_existing_argo_bootstrap_never_calls_helm(self):
+        def k(*args, **kwargs):
+            if 'deployment' in args:
+                return '{"metadata":{"name":"argocd-server"}}'
+            if 'secrets' in args:
+                return 'secret/sh.helm.release.v1.argocd.v1'
+            return ''
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(lab, 'LOCAL', Path(tmp)), patch.object(lab, 'guard'), patch.object(lab, 'namespace_guard'), patch.object(lab, 'refuse_foreign'), patch.object(lab, 'k', side_effect=k), patch.object(lab, 'run') as run:
+                lab.argocd(None)
+                run.assert_not_called()
 
     def test_cleanup_can_resume_with_missing_container(self):
         data = {'containers': {'deleted': 'gone-id', 'remaining': 'our-id'}, 'network': None, 'volumes': {}}

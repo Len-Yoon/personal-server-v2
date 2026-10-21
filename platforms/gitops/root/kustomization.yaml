@@ -1,0 +1,7 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  # 디렉터리 단위 참조로 Kustomize 기본 load 제한을 유지함.
+  - ../../namespaces
+  - ../../argocd
+  - ../../observability

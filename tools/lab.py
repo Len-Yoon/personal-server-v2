@@ -27,6 +27,16 @@ REPO = 'ssh://git@github.com/Len-Yoon/personal-server-v2.git'
 SOURCE = '23572de06038341fc2ed11714cccde04e9967080'
 REGISTRY = 'registry:2.8.3'  # dependencies.json의 digest로 실행
 ENVIRONMENTS = {'dev': 'v2-dev', 'verify': 'v2-verify'}
+APPLICATIONS = {
+    'dev': ('book-dev', 'book-dev', 'apps/book/overlays/dev', 'v2-dev', ['deployment/book']),
+    'verify': ('book-verify', 'book-verify', 'apps/book/overlays/verify', 'v2-verify', ['deployment/book']),
+    'root': ('v2-root', 'v2-root', 'platforms/gitops/root', 'argocd', []),
+    'argocd': ('argocd-self', 'argocd-platform', 'platforms/argocd/chart', 'argocd',
+               ['deployment/argocd-server', 'deployment/argocd-repo-server', 'deployment/argocd-redis', 'statefulset/argocd-application-controller']),
+    'prometheus': ('prometheus', 'observability', 'platforms/observability/prometheus/chart', 'v2-observability', ['deployment/prometheus', 'deployment/prometheus-kube-state-metrics']),
+    'grafana': ('grafana', 'observability', 'platforms/observability/grafana/chart', 'v2-observability', ['deployment/grafana']),
+    'blackbox': ('blackbox', 'observability', 'platforms/observability/blackbox', 'v2-observability', ['deployment/blackbox']),
+}
 
 
 def run(args, *, stdin=None, capture=True, check=True):
@@ -277,18 +287,18 @@ def build(args):
     print('Book ARM64 이미지 빌드·digest 고정 완료:', digest)
 
 
-def deploy(_):
+def credentials(_):
+    """GitOps 밖에서 관리하는 로컬 실습 자격 증명만 생성함."""
     guard()
-    if not (LOCAL / 'image.json').exists():
-        raise RuntimeError('먼저 build를 실행해야 함')
-    for namespace in ENVIRONMENTS.values():
+    for namespace in [*ENVIRONMENTS.values(), 'v2-observability']:
         refuse_foreign('namespace', namespace)
-    k('apply', '-f', 'platforms/namespaces.yaml')
+        existing = k('get', 'namespace', namespace, '--ignore-not-found', '-o', 'json').strip()
+        if not existing:
+            # Secret 생성에 필요한 최소 namespace. 정책/완전한 명세는 root가 인수함.
+            k('create', '-f', '-', stdin=json.dumps({'apiVersion': 'v1', 'kind': 'Namespace', 'metadata': {'name': namespace, 'labels': {OWNER: VALUE}}}))
     for env, namespace in ENVIRONMENTS.items():
         namespace_guard(namespace)
-        for kind, name in [('deployment', 'book'), ('service', 'book'), ('pvc', 'book-data'), ('secret', 'book-auth'), ('resourcequota', 'book-budget'), ('limitrange', 'book-defaults')]:
-            refuse_foreign(kind, name, namespace)
-        k('apply', '-k', f'apps/book/overlays/{env}')
+        refuse_foreign('secret', 'book-auth', namespace)
         secret_path = LOCAL / f'{env}-password'
         if not secret_path.exists():
             secret_path.write_text(secrets.token_urlsafe(24))
@@ -296,8 +306,24 @@ def deploy(_):
         secret = {'apiVersion': 'v1', 'kind': 'Secret', 'metadata': {'name': 'book-auth', 'namespace': namespace, 'labels': {OWNER: VALUE}},
                   'type': 'Opaque', 'stringData': {'password': secret_path.read_text().strip()}}
         k('apply', '-f', '-', stdin=json.dumps(secret))
-        k('-n', namespace, 'rollout', 'status', 'deployment/book', '--timeout=180s')
-    print('Book dev/verify 배포 PASS')
+    path = LOCAL / 'grafana-password'
+    if not path.exists():
+        path.write_text(secrets.token_urlsafe(24))
+        path.chmod(0o600)
+    refuse_foreign('secret', 'grafana-admin', 'v2-observability')
+    k('apply', '-f', '-', stdin=json.dumps({'apiVersion': 'v1', 'kind': 'Secret',
+        'metadata': {'name': 'grafana-admin', 'namespace': 'v2-observability', 'labels': {OWNER: VALUE}},
+        'stringData': {'admin-user': 'admin', 'admin-password': path.read_text().strip()}}))
+    print('V2 실습 Secret 준비 PASS (값 출력 없음)')
+
+
+def deploy(args):
+    credentials(args)
+    revision = getattr(args, 'revision', None) or run(['git', 'rev-parse', 'HEAD']).strip()
+    from types import SimpleNamespace
+    for environment in ENVIRONMENTS:
+        sync(SimpleNamespace(environment=environment, revision=revision))
+    print('Book dev/verify Argo 배포 PASS')
 
 
 def seed(_):
@@ -322,50 +348,94 @@ def argocd(_):
                        'stringData': {'type': 'git', 'url': REPO, 'sshPrivateKey': repo_key.read_text()}}
         k('apply', '-f', '-', stdin=json.dumps(repo_secret))
     dependency = json.loads((ROOT / 'dependencies.json').read_text())
-    chart = LOCAL / 'cache' / dependency['argocd_chart_file']
+    chart = ROOT / 'platforms/argocd/chart/charts' / dependency['argocd_chart_file']
     if hashlib.sha256(chart.read_bytes()).hexdigest() != dependency['argocd_chart_sha256']:
         raise RuntimeError('Argo chart checksum 불일치')
-    run(['helm', 'upgrade', '--install', 'argocd', chart, '--namespace', 'argocd', '--kubeconfig', KUBE,
-         '--kube-context', CONTEXT, '-f', 'platforms/argocd/values.yaml', '--wait', '--timeout', '300s'], capture=False)
+    current = k('-n', 'argocd', 'get', 'deployment', 'argocd-server', '--ignore-not-found', '-o', 'json').strip()
+    # Helm 3/4의 list 상태 필터 차이 없이 release 기록의 존재만 읽음. data는 조회하지 않음.
+    releases = k('-n', 'argocd', 'get', 'secrets', '-l', 'owner=helm,name=argocd', '-o', 'name').strip()
+    if current:
+        refuse_foreign('deployment', 'argocd-server', 'argocd')
+        print('기존 Argo CD 보존. Helm upgrade는 실행하지 않음')
+    elif releases:
+        raise RuntimeError('기존 Helm 기록이 있으나 Argo server가 없음. recover 절차 필요')
+    else:
+        run(['helm', 'install', 'argocd', ROOT / 'platforms/argocd/chart', '--namespace', 'argocd', '--kubeconfig', KUBE,
+             '--kube-context', CONTEXT, '-f', 'platforms/argocd/values.yaml',
+             '--set', 'argo-cd.redisSecretInit.enabled=true', '--set', 'argo-cd.configs.secret.createSecret=true',
+             '--wait', '--timeout', '300s'], capture=False)
     for kind in ('appproject', 'application'):
-        for name in ('book-dev', 'book-verify'):
-            refuse_foreign(kind, name, 'argocd')
-    k('apply', '-f', 'platforms/argocd/applications.yaml')
+        refuse_foreign(kind, 'v2-root', 'argocd')
+    k('apply', '-f', 'platforms/gitops/bootstrap.yaml')
     import base64
-    secret = json.loads(k('-n', 'argocd', 'get', 'secret', 'argocd-initial-admin-secret', '-o', 'json'))
-    password = LOCAL / 'argocd-password'
-    password.write_bytes(base64.b64decode(secret['data']['password']))
-    password.chmod(0o600)
-    print('Argo CD 설치 PASS. Git main에 digest 명세가 반영된 뒤 sync 실행')
+    raw = k('-n', 'argocd', 'get', 'secret', 'argocd-initial-admin-secret', '--ignore-not-found', '-o', 'json').strip()
+    if raw:
+        password = LOCAL / 'argocd-password'
+        password.write_bytes(base64.b64decode(json.loads(raw)['data']['password']))
+        password.chmod(0o600)
+    print('최소 bootstrap PASS. root → argocd → 각 서비스 순서로 Argo sync 실행')
 
 
 def application_guard(environment):
-    app = json.loads(k('-n', 'argocd', 'get', 'application', 'book-' + environment, '-o', 'json'))
+    name, project, path, namespace, _ = APPLICATIONS[environment]
+    app = json.loads(k('-n', 'argocd', 'get', 'application', name, '-o', 'json'))
     spec = app['spec']
     if (app['metadata'].get('labels', {}).get(OWNER) != VALUE
-            or spec['project'] != 'book-' + environment
-            or spec['destination'] != {'server': 'https://kubernetes.default.svc', 'namespace': ENVIRONMENTS[environment]}
+            or spec['project'] != project
+            or spec['destination'] != {'server': 'https://kubernetes.default.svc', 'namespace': namespace}
             or spec['source']['repoURL'] != REPO
-            or spec['source']['path'] != 'apps/book/overlays/' + environment):
+            or spec['source']['path'] != path
+            or spec['source'].get('chart') or spec.get('sources')):
         raise RuntimeError('Application 소유/project/source/destination 불일치')
+    if environment in ('argocd', 'prometheus', 'grafana'):
+        release = 'argocd' if environment == 'argocd' else environment
+        if spec['source'].get('helm', {}) != {'releaseName': release, 'valueFiles': ['../values.yaml']}:
+            raise RuntimeError('고정 chart/values 계약 불일치')
     return app
+
+
+def preflight_root(revision):
+    if run(['git', 'rev-parse', 'HEAD']).strip() != revision or run(['git', 'status', '--porcelain', '--', 'platforms']).strip():
+        raise RuntimeError('root sync는 검토할 SHA로 checkout하고 platforms 변경을 커밋한 상태에서 실행해야 함')
+    rendered = k('kustomize', 'platforms/gitops/root')
+    objects = decode_objects(k('create', '--dry-run=client', '--validate=false', '-f', '-', '-o', 'json', stdin=rendered))
+    allowed = {'Namespace': {'argocd', 'v2-dev', 'v2-verify', 'v2-observability'},
+               'Application': {data[0] for key, data in APPLICATIONS.items() if key != 'root'},
+               'AppProject': {'book-dev', 'book-verify', 'argocd-platform', 'observability'}}
+    for obj in objects:
+        kind, meta = obj['kind'], obj['metadata']
+        if meta['name'] not in allowed.get(kind, set()) or meta.get('labels', {}).get(OWNER) != VALUE:
+            raise RuntimeError('root 선언 종류/이름/소유 불일치')
+        if kind != 'Namespace' and meta.get('namespace') != 'argocd':
+            raise RuntimeError('root 선언 namespace 불일치')
+        refuse_foreign(kind, meta['name'], None if kind == 'Namespace' else 'argocd')
 
 
 def sync(args):
     guard()
+    if args.environment == 'root':
+        preflight_root(args.revision)
     before = application_guard(args.environment)
     if before.get('operation') or before.get('status', {}).get('operationState', {}).get('phase') == 'Running':
         raise RuntimeError('기존 sync 진행 중')
-    app = 'book-' + args.environment
+    app, _, _, namespace, workloads = APPLICATIONS[args.environment]
     request_info = [{'name': 'v2-request', 'value': secrets.token_hex(16)}]
     k('-n', 'argocd', 'patch', 'application', app, '--type=merge', '-p', json.dumps({'operation': {'info': request_info, 'sync': {'prune': False, 'revision': args.revision}}}))
-    for _ in range(90):
-        obj = json.loads(k('-n', 'argocd', 'get', 'application', app, '-o', 'json'))
+    for _ in range(180):
+        try:
+            obj = application_guard(args.environment)
+        except RuntimeError as error:
+            # self 관리 중 API 일시 단절은 재시도하되 계약 불일치는 즉시 거부함.
+            if '불일치' in str(error):
+                raise
+            time.sleep(2)
+            continue
         op = obj.get('status', {}).get('operationState', {})
         if (op.get('operation', {}).get('sync', {}).get('revision') == args.revision
                 and op.get('operation', {}).get('info') == request_info and not obj.get('operation')):
             if op.get('phase') == 'Succeeded':
-                k('-n', ENVIRONMENTS[args.environment], 'rollout', 'status', 'deployment/book', '--timeout=180s')
+                for workload in workloads:
+                    k('-n', namespace, 'rollout', 'status', workload, '--timeout=240s')
                 print('GitOps sync PASS:', args.revision)
                 return
             if op.get('phase') in {'Failed', 'Error'}:
@@ -379,7 +449,14 @@ def serve(_):
     children = []
     logs = []
     try:
-        for namespace, service, ports in [('v2-dev', 'book', '8080:8003'), ('v2-verify', 'book', '8081:8003'), ('argocd', 'argocd-server', '8082:443')]:
+        endpoints = [('v2-dev', 'book', '8080:8003'), ('v2-verify', 'book', '8081:8003'), ('argocd', 'argocd-server', '8082:443')]
+        exists = k('get', 'namespace', 'v2-observability', '--ignore-not-found', '-o', 'json').strip()
+        if exists:
+            namespace_guard('v2-observability')
+            for service, port in [('grafana', '8083:80'), ('prometheus', '8084:80')]:
+                if k('-n', 'v2-observability', 'get', 'service', service, '--ignore-not-found', '-o', 'json').strip():
+                    endpoints.append(('v2-observability', service, port))
+        for namespace, service, ports in endpoints:
             namespace_guard(namespace)
             log_path = LOCAL / ('forward-' + ports.split(':')[0] + '.log')
             log = log_path.open('w')
@@ -394,7 +471,7 @@ def serve(_):
                 time.sleep(0.1)
             else:
                 raise RuntimeError('port-forward 준비 시간 초과')
-        print('Book http://localhost:8080 / http://localhost:8081 / Argo https://localhost:8082', flush=True)
+        print('Book :8080/:8081 / Argo https://localhost:8082 / 설치 시 Grafana :8083 / Prometheus :8084 (모두 loopback)', flush=True)
         while all(p.poll() is None for p in children):
             time.sleep(1)
         raise RuntimeError('port-forward 중단됨. serve 재실행 필요')
@@ -509,22 +586,90 @@ def cleanup(_):
     print('미완성 V2 자원 정리 완료')
 
 
+def gitops(args):
+    """root 선언 등록 후 서비스를 수동 동기화함. Helm upgrade 경로 없음."""
+    from types import SimpleNamespace
+    revision = args.revision or run(['git', 'rev-parse', 'HEAD']).strip()
+    credentials(args)
+    for name in ('root', 'argocd', 'blackbox', 'prometheus', 'grafana', 'dev', 'verify'):
+        sync(SimpleNamespace(environment=name, revision=revision))
+
+
+def recover(args):
+    if not args.confirm_recovery:
+        raise RuntimeError('비상 복구는 --confirm-recovery를 명시해야 함')
+    guard()
+    namespace_guard('argocd')
+    lock = json.loads((ROOT / 'dependencies.json').read_text())
+    archive = ROOT / 'platforms/argocd/chart/charts' / lock['argocd_chart_file']
+    if hashlib.sha256(archive.read_bytes()).hexdigest() != lock['argocd_chart_sha256']:
+        raise RuntimeError('복구 chart checksum 불일치')
+    rendered = run(['helm', 'template', 'argocd', ROOT / 'platforms/argocd/chart', '-n', 'argocd', '-f', 'platforms/argocd/values.yaml'])
+    objects = decode_objects(k('create', '--dry-run=client', '--validate=false', '-f', '-', '-o', 'json', stdin=rendered))
+    allowed = {'ServiceAccount', 'ConfigMap', 'Service', 'Deployment', 'StatefulSet', 'Role', 'RoleBinding', 'ClusterRole', 'ClusterRoleBinding', 'CustomResourceDefinition', 'NetworkPolicy'}
+    for obj in objects:
+        kind, meta = obj['kind'], obj['metadata']
+        if kind not in allowed or meta.get('labels', {}).get(OWNER) != VALUE:
+            raise RuntimeError('복구 렌더 종류/소유 불일치')
+        if kind == 'CustomResourceDefinition':
+            if meta['name'] not in {'applications.argoproj.io', 'applicationsets.argoproj.io', 'appprojects.argoproj.io'}:
+                raise RuntimeError('알 수 없는 복구 CRD')
+        elif not meta['name'].startswith('argocd-'):
+            raise RuntimeError('복구 자원 이름 불일치')
+        if meta.get('namespace') not in (None, 'argocd'):
+            raise RuntimeError('복구 namespace 불일치')
+        ns = 'argocd' if kind not in {'ClusterRole', 'ClusterRoleBinding', 'CustomResourceDefinition'} else None
+        # 이전 Helm CRD에는 owner가 없을 수 있어 검토된 3개 이름/Argo label만 예외로 인수함.
+        if kind != 'CustomResourceDefinition':
+            refuse_foreign(kind, meta['name'], ns)
+        else:
+            raw = k('get', kind, meta['name'], '--ignore-not-found', '-o', 'json').strip()
+            labels = json.loads(raw)['metadata'].get('labels', {}) if raw else {}
+            if raw and (labels.get('app.kubernetes.io/part-of') != 'argocd' or labels.get(OWNER) not in (None, VALUE)):
+                raise RuntimeError('복구 CRD의 Argo 소유 label 불일치')
+    k('apply', '--server-side', '--force-conflicts', '--field-manager=v2-breakglass', '-f', '-', stdin=json.dumps(objects_to_list(objects)))
+    (LOCAL / 'recovery.json').write_text(json.dumps({'source_commit': run(['git', 'rev-parse', 'HEAD']).strip(), 'resources': len(objects), 'secret_changes': False}, indent=2) + '\n')
+    print('동일 Git 명세로 Argo 비상 복구 적용. 이후 sync argocd 및 모든 서비스 상태 재확인 필요')
+
+
+def objects_to_list(objects):
+    return {'apiVersion': 'v1', 'kind': 'List', 'items': objects}
+
+
+def decode_objects(output):
+    """kubectl multi-document JSON은 버전에 따라 List 또는 연속 JSON 객체임."""
+    decoder = json.JSONDecoder()
+    objects = []
+    remaining = output.lstrip()
+    while remaining:
+        obj, end = decoder.raw_decode(remaining)
+        objects.extend(obj['items'] if obj.get('kind') == 'List' else [obj])
+        remaining = remaining[end:].lstrip()
+    if not objects:
+        raise RuntimeError('비어 있는 렌더 결과')
+    return objects
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
     functions = {'doctor': doctor, 'up': up, 'build': build, 'deploy': deploy, 'seed': seed, 'argocd': argocd,
-                 'sync': sync, 'serve': serve, 'check': check, 'status': status, 'exercise': exercise, 'restore': restore, 'down': down, 'cleanup': cleanup}
+                 'sync': sync, 'gitops': gitops, 'credentials': credentials, 'recover': recover,
+                 'serve': serve, 'check': check, 'status': status, 'exercise': exercise, 'restore': restore, 'down': down, 'cleanup': cleanup}
     for name in functions:
         p = sub.add_parser(name)
         if name == 'build':
             p.add_argument('--source', required=True, help='V1 로컬 Git 저장소. 앱 파일만 git archive로 추출')
         if name == 'sync':
-            p.add_argument('environment', choices=ENVIRONMENTS)
-            p.add_argument('--revision', required=True, help='Git commit SHA')
+            p.add_argument('environment', choices=APPLICATIONS)
+        if name in ('sync', 'gitops', 'deploy'):
+            p.add_argument('--revision', required=name == 'sync', help='GitHub에 push한 40자리 Git commit SHA, 기본 현재 HEAD')
+        if name == 'recover':
+            p.add_argument('--confirm-recovery', action='store_true', help='정상 Argo sync가 불가능할 때만 동일 명세 비상 적용')
         if name == 'exercise':
             p.add_argument('fault', choices=['image', 'pending', 'probe', 'oom', 'worker'])
     args = parser.parse_args()
-    if args.command == 'sync' and (len(args.revision) != 40 or any(c not in '0123456789abcdef' for c in args.revision)):
+    if getattr(args, 'revision', None) and (len(args.revision) != 40 or any(c not in '0123456789abcdef' for c in args.revision)):
         parser.error('revision은 40자리 lowercase commit SHA 필요')
     try:
         functions[args.command](args)
