@@ -37,6 +37,8 @@ APPLICATIONS = {
                ['deployment/argocd-server', 'deployment/argocd-repo-server', 'deployment/argocd-redis', 'statefulset/argocd-application-controller']),
     'prometheus': ('prometheus', 'observability', 'platforms/observability/prometheus/chart', 'v2-observability', ['deployment/prometheus', 'deployment/prometheus-kube-state-metrics']),
     'grafana': ('grafana', 'observability', 'platforms/observability/grafana/chart', 'v2-observability', ['deployment/grafana']),
+    'loki': ('loki', 'logging', 'platforms/observability/logging/loki', 'v2-observability', ['statefulset/loki']),
+    'alloy': ('alloy', 'logging', 'platforms/observability/logging/alloy', 'v2-observability', ['deployment/alloy']),
     'blackbox': ('blackbox', 'observability', 'platforms/observability/blackbox', 'v2-observability', ['deployment/blackbox']),
 }
 
@@ -457,10 +459,37 @@ def preflight_root(revision):
         refuse_foreign(kind, meta['name'], None if kind == 'Namespace' else 'argocd')
 
 
+def preflight_logging(environment, revision):
+    """신규 수집 권한/저장소가 타 namespace·타 소유 자원을 인수하지 않도록 검사함."""
+    path = APPLICATIONS[environment][2]
+    if run(['git', 'rev-parse', 'HEAD']).strip() != revision or run(['git', 'status', '--porcelain', '--', path]).strip():
+        raise RuntimeError('로그 sync는 해당 SHA의 커밋된 명세로 실행해야 함')
+    rendered = k('kustomize', path)
+    objects = decode_objects(k('create', '--dry-run=client', '--validate=false', '-f', '-', '-o', 'json', stdin=rendered))
+    allowed = ({'StatefulSet': {'loki'}, 'Service': {'loki'}, 'PersistentVolumeClaim': {'loki-data'},
+                'NetworkPolicy': {'loki-isolation'}} if environment == 'loki' else
+               {'Deployment': {'alloy'}, 'Service': {'alloy'}, 'ServiceAccount': {'v2-alloy'},
+                'NetworkPolicy': {'alloy-isolation'}, 'Role': {'v2-alloy-logs'}, 'RoleBinding': {'v2-alloy-logs'}})
+    for obj in objects:
+        kind, meta = obj['kind'], obj['metadata']
+        namespace = meta.get('namespace')
+        expected_namespaces = {'v2-dev', 'v2-verify', 'argocd', 'v2-observability'} if kind in ('Role', 'RoleBinding') else {'v2-observability'}
+        name_allowed = meta['name'] in allowed.get(kind, set())
+        if kind == 'ConfigMap':
+            import re
+            name_allowed = bool(re.fullmatch(environment + r'-config-[a-z0-9]{10}', meta['name']))
+        if not name_allowed or namespace not in expected_namespaces or meta.get('labels', {}).get(OWNER) != VALUE:
+            raise RuntimeError('로그 선언 종류/이름/namespace/소유 불일치')
+        namespace_guard(namespace)
+        refuse_foreign(kind, meta['name'], namespace)
+
+
 def sync(args):
     guard()
     if args.environment == 'root':
         preflight_root(args.revision)
+    if args.environment in ('loki', 'alloy'):
+        preflight_logging(args.environment, args.revision)
     before = application_guard(args.environment)
     if before.get('operation') or before.get('status', {}).get('operationState', {}).get('phase') == 'Running':
         raise RuntimeError('기존 sync 진행 중')
@@ -643,7 +672,7 @@ def gitops(args):
     from types import SimpleNamespace
     revision = args.revision or run(['git', 'rev-parse', 'HEAD']).strip()
     credentials(args)
-    for name in ('root', 'argocd', 'blackbox', 'prometheus', 'grafana', 'dev', 'verify', 'youtube-dev', 'youtube-verify', 'portal-dev', 'portal-verify'):
+    for name in ('root', 'argocd', 'blackbox', 'loki', 'alloy', 'prometheus', 'grafana', 'dev', 'verify', 'youtube-dev', 'youtube-verify', 'portal-dev', 'portal-verify'):
         sync(SimpleNamespace(environment=name, revision=revision))
 
 

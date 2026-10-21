@@ -1,0 +1,117 @@
+logging {
+  level  = "warn"
+  format = "logfmt"
+}
+
+discovery.kubernetes "v2_pods" {
+  role = "pod"
+
+  namespaces {
+    names         = ["v2-dev", "v2-verify", "argocd", "v2-observability"]
+    own_namespace = false
+  }
+
+  selectors {
+    role  = "pod"
+    label = "lab.personal-server-v2/owner=personal-server-v2"
+  }
+
+  attach_metadata {
+    node      = false
+    namespace = false
+  }
+}
+
+discovery.relabel "v2_logs" {
+  targets = discovery.kubernetes.v2_pods.targets
+
+  rule {
+    source_labels = ["__meta_kubernetes_pod_label_lab_personal_server_v2_owner"]
+    action        = "keep"
+    regex         = "personal-server-v2"
+  }
+
+  rule {
+    source_labels = ["__meta_kubernetes_namespace"]
+    action        = "keep"
+    regex         = "v2-dev|v2-verify|argocd|v2-observability"
+  }
+
+  // 수집기 자신의 경고 로그를 다시 수집하는 경로를 제외함.
+  rule {
+    source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+    action        = "drop"
+    regex         = "alloy"
+  }
+
+  rule {
+    target_label = "cluster"
+    replacement  = "ps-v2"
+  }
+
+  rule {
+    source_labels = ["__meta_kubernetes_namespace"]
+    target_label  = "namespace"
+  }
+
+  rule {
+    target_label = "environment"
+    replacement  = "platform"
+  }
+
+  rule {
+    source_labels = ["__meta_kubernetes_namespace"]
+    target_label  = "environment"
+    regex         = "v2-(dev|verify)"
+    replacement   = "$1"
+  }
+
+  rule {
+    target_label = "service"
+    replacement  = "unlabeled"
+  }
+
+  rule {
+    source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+    target_label  = "service"
+    regex         = "(.+)"
+    replacement   = "$1"
+  }
+
+  rule {
+    source_labels = ["__meta_kubernetes_pod_name"]
+    target_label  = "pod"
+  }
+
+  rule {
+    source_labels = ["__meta_kubernetes_pod_container_name"]
+    target_label  = "container"
+  }
+}
+
+loki.source.kubernetes "v2_logs" {
+  targets    = discovery.relabel.v2_logs.output
+  forward_to = [loki.process.v2_guard.receiver]
+}
+
+loki.process "v2_guard" {
+  forward_to = [loki.write.v2.receiver]
+
+  // 고정 키 뒤의 값부터 줄 끝까지 제거하는 보조 장치임. 원본 로그의 비밀 제거를 대체하지 않음.
+  stage.replace {
+    expression = "(?i)(?:password|token|authorization|secret|private[_-]?key)[\"']?\\s*[:=]\\s*(.*)"
+    replace    = "[REDACTED]"
+  }
+
+  stage.label_keep {
+    values = ["cluster", "namespace", "environment", "service", "container", "pod"]
+  }
+}
+
+loki.write "v2" {
+  endpoint {
+    url        = "http://loki.v2-observability.svc.cluster.local:3100/loki/api/v1/push"
+    batch_size = "256KiB"
+    batch_wait = "1s"
+  }
+}

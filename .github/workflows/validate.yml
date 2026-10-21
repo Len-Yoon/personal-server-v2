@@ -25,4 +25,6 @@ jobs:
         run: |
           helm template argocd platforms/argocd/chart -n argocd -f platforms/argocd/values.yaml > /tmp/argocd-self.yaml
           helm template argocd platforms/argocd/chart -n argocd -f platforms/argocd/values.yaml --set argo-cd.configs.secret.createSecret=true --set argo-cd.redisSecretInit.enabled=true > /tmp/argocd-bootstrap.yaml
+      - name: Loki·Alloy 고정 바이너리 설정 검증
+        run: python3 tools/validate_logging.py --ci
       # 클러스터 생성·배포·자격 증명 접근은 이 workflow의 범위가 아님.

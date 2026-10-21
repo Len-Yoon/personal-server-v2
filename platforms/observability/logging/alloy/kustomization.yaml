@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- workload.yaml
+- networkpolicy.yaml
+- rbac.yaml
+configMapGenerator:
+- name: alloy-config
+  namespace: v2-observability
+  files:
+  - config.alloy
+generatorOptions:
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
