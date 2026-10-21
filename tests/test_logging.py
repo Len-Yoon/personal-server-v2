@@ -25,6 +25,28 @@ def render(name):
 
 
 class LoggingManifestTests(unittest.TestCase):
+    def test_observability_memory_and_log_query_budgets(self):
+        def mib(value):
+            return int(value[:-2]) * (1024 if value.endswith('Gi') else 1)
+        objects = render('alloy') + render('loki')
+        for name in ('prometheus', 'grafana'):
+            base = ROOT / 'platforms/observability' / name
+            rendered = subprocess.check_output(['helm', 'template', name, str(base / 'chart'), '-n', 'v2-observability', '-f', str(base / 'values.yaml')], text=True)
+            objects += [obj for obj in yaml.safe_load_all(rendered) if obj]
+        objects += [obj for obj in yaml.safe_load_all(subprocess.check_output(['kubectl', 'kustomize', str(ROOT / 'platforms/observability/blackbox')], text=True)) if obj]
+        total = sum(mib(container['resources']['limits']['memory']) for obj in objects if obj['kind'] in ('Deployment', 'StatefulSet') for container in obj['spec']['template']['spec']['containers'])
+        quota = next(obj for obj in objects if obj['kind'] == 'ResourceQuota')
+        self.assertLessEqual(total, mib(quota['spec']['hard']['limits.memory']))
+        grafana = yaml.safe_load((ROOT / 'platforms/observability/grafana/values.yaml').read_text())['grafana']
+        self.assertLess(int(grafana['env']['GOMEMLIMIT'].removesuffix('MiB')), mib(grafana['resources']['limits']['memory']))
+        datasource = next(row for row in grafana['datasources']['datasources.yaml']['datasources'] if row['uid'] == 'v2-loki')
+        dashboard = json.loads((ROOT / 'platforms/observability/grafana/chart/files/v2-logs.json').read_text())
+        for panel in dashboard['panels']:
+            if panel['type'] == 'logs':
+                for target in panel['targets']:
+                    self.assertGreater(target['maxLines'], 0)
+                    self.assertLessEqual(target['maxLines'], datasource['jsonData']['maxLines'])
+
     def test_workloads_have_digest_limits_and_no_host_or_secret_files(self):
         kinds = set()
         for name in ('alloy', 'loki'):

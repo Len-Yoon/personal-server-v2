@@ -52,6 +52,35 @@ def grafana_json(path, parameters=None):
     return result['data']
 
 
+def check_grafana_panels():
+    """proxy 직접 조회에 더해 실제 Grafana datasource backend의 프레임 변환을 검증함."""
+    dashboard = json.loads((lab.ROOT / 'platforms/observability/grafana/chart/files/v2-logs.json').read_text())
+    queries = []
+    for panel in dashboard['panels']:
+        target = dict(panel['targets'][0])
+        for variable in ('environment', 'namespace', 'service'):
+            target['expr'] = target['expr'].replace('$' + variable, '.*')
+        target.update(refId=str(panel['id']), intervalMs=15000, maxDataPoints=400)
+        queries.append(target)
+    credentials = 'admin:' + (lab.LOCAL / 'grafana-password').read_text().strip()
+    request = urllib.request.Request('http://127.0.0.1:8083/api/ds/query',
+        data=json.dumps({'from': 'now-30m', 'to': 'now', 'queries': queries}).encode(),
+        headers={'Authorization': 'Basic ' + base64.b64encode(credentials.encode()).decode(),
+                 'Content-Type': 'application/json'})
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+    try:
+        with opener.open(request, timeout=30) as response:
+            result = json.load(response)
+    except urllib.error.HTTPError as error:
+        raise RuntimeError(f'로컬 Grafana 패널 query HTTP {error.code}') from None
+    results = result.get('results', {})
+    if len(results) != len(queries) or any(row.get('error') or row.get('status', 200) != 200 for row in results.values()):
+        raise RuntimeError('Grafana 로그 패널 backend query 실패')
+    if not results.get('2', {}).get('frames'):
+        raise RuntimeError('Grafana 서비스 로그 프레임 누락')
+    return {'queries': len(queries), 'frames': sum(len(row.get('frames', [])) for row in results.values())}
+
+
 def query_lines(namespace, service, marker, start_ns):
     if namespace not in lab.ENVIRONMENTS.values() or service not in SERVICES:
         raise RuntimeError('V2 앱 로그 범위 불일치')
@@ -309,6 +338,7 @@ def verify(restart=False):
         canaries = create_canaries()
         report['canaries'] = observe_canaries(canaries, start_ns)
         report['collected_namespaces'] = check_namespace_scope(start_ns)
+        report['grafana_panels'] = check_grafana_panels()
         if restart:
             # Alloy가 중지된 동안 새 요청 없이 이전 UUID를 조회하여 재수집과 구분함.
             report.update(verify_retention(canaries, start_ns))

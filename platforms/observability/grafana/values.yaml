@@ -31,10 +31,10 @@ grafana:
   resources:
     requests:
       cpu: 50m
-      memory: 64Mi
+      memory: 128Mi
     limits:
       cpu: 500m
-      memory: 384Mi
+      memory: 768Mi
   securityContext:
     runAsNonRoot: true
     runAsUser: 472
@@ -51,6 +51,8 @@ grafana:
       - ALL
     seccompProfile:
       type: RuntimeDefault
+  env:
+    GOMEMLIMIT: 512MiB
   testFramework:
     enabled: false
   grafana.ini:
@@ -85,7 +87,7 @@ grafana:
         isDefault: false
         editable: false
         jsonData:
-          maxLines: 1000
+          maxLines: 300
   dashboardProviders:
     dashboardproviders.yaml:
       apiVersion: 1
