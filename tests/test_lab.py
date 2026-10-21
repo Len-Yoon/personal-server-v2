@@ -108,6 +108,18 @@ class GuardTests(unittest.TestCase):
             self.assertEqual([c.args[0].environment for c in sync.call_args_list], ['dev', 'verify'])
             k.assert_not_called()
 
+    def test_existing_argo_bootstrap_never_calls_helm(self):
+        def k(*args, **kwargs):
+            if 'deployment' in args:
+                return '{"metadata":{"name":"argocd-server"}}'
+            if 'secrets' in args:
+                return 'secret/sh.helm.release.v1.argocd.v1'
+            return ''
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(lab, 'LOCAL', Path(tmp)), patch.object(lab, 'guard'), patch.object(lab, 'namespace_guard'), patch.object(lab, 'refuse_foreign'), patch.object(lab, 'k', side_effect=k), patch.object(lab, 'run') as run:
+                lab.argocd(None)
+                run.assert_not_called()
+
     def test_cleanup_can_resume_with_missing_container(self):
         data = {'containers': {'deleted': 'gone-id', 'remaining': 'our-id'}, 'network': None, 'volumes': {}}
         calls = []

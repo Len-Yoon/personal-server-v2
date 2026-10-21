@@ -352,11 +352,12 @@ def argocd(_):
     if hashlib.sha256(chart.read_bytes()).hexdigest() != dependency['argocd_chart_sha256']:
         raise RuntimeError('Argo chart checksum 불일치')
     current = k('-n', 'argocd', 'get', 'deployment', 'argocd-server', '--ignore-not-found', '-o', 'json').strip()
-    releases = json.loads(run(['helm', 'list', '-n', 'argocd', '--all', '--kubeconfig', KUBE, '--kube-context', CONTEXT, '-o', 'json']))
+    # Helm 3/4의 list 상태 필터 차이 없이 release 기록의 존재만 읽음. data는 조회하지 않음.
+    releases = k('-n', 'argocd', 'get', 'secrets', '-l', 'owner=helm,name=argocd', '-o', 'name').strip()
     if current:
         refuse_foreign('deployment', 'argocd-server', 'argocd')
         print('기존 Argo CD 보존. Helm upgrade는 실행하지 않음')
-    elif any(r['name'] == 'argocd' for r in releases):
+    elif releases:
         raise RuntimeError('기존 Helm 기록이 있으나 Argo server가 없음. recover 절차 필요')
     else:
         run(['helm', 'install', 'argocd', ROOT / 'platforms/argocd/chart', '--namespace', 'argocd', '--kubeconfig', KUBE,
