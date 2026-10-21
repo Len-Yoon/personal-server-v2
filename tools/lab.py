@@ -30,6 +30,8 @@ ENVIRONMENTS = {'dev': 'v2-dev', 'verify': 'v2-verify'}
 APPLICATIONS = {
     'dev': ('book-dev', 'book-dev', 'apps/book/overlays/dev', 'v2-dev', ['deployment/book']),
     'verify': ('book-verify', 'book-verify', 'apps/book/overlays/verify', 'v2-verify', ['deployment/book']),
+    **{f'{app}-{env}': (f'{app}-{env}', f'{app}-{env}', f'apps/{app}/overlays/{env}', ns, [f'deployment/{app}'])
+       for app in ('youtube', 'portal') for env, ns in ENVIRONMENTS.items()},
     'root': ('v2-root', 'v2-root', 'platforms/gitops/root', 'argocd', []),
     'argocd': ('argocd-self', 'argocd-platform', 'platforms/argocd/chart', 'argocd',
                ['deployment/argocd-server', 'deployment/argocd-repo-server', 'deployment/argocd-redis', 'statefulset/argocd-application-controller']),
@@ -245,15 +247,17 @@ def up(_):
 def build(args):
     guard()
     source = Path(args.source).resolve()
+    app = getattr(args, 'app', 'book')
+    source_dir = {'book': 'book-memo', 'youtube': 'youtube-memo', 'portal': 'portal-web'}[app]
     if run(['git', '-C', source, 'rev-parse', '--verify', SOURCE]).strip() != SOURCE:
         raise RuntimeError('고정 source commit 없음')
     # git archive는 바이너리이므로 별도 호출. worktree/실데이터/미추적 파일을 읽지 않음.
-    archive = subprocess.run(['git', '-C', str(source), 'archive', SOURCE, 'book-memo'], check=True, capture_output=True).stdout
-    context = Path(tempfile.mkdtemp(prefix='book-source-', dir=LOCAL))
+    archive = subprocess.run(['git', '-C', str(source), 'archive', SOURCE, source_dir], check=True, capture_output=True).stdout
+    context = Path(tempfile.mkdtemp(prefix=app + '-source-', dir=LOCAL))
     with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
         for member in tar.getmembers():
             parts = Path(member.name).parts
-            if len(parts) < 2 or parts[0] != 'book-memo':
+            if len(parts) < 2 or parts[0] != source_dir:
                 continue
             relative = Path(*parts[1:])
             if member.isdir():
@@ -267,24 +271,28 @@ def build(args):
             dest = context / relative
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(tar.extractfile(member).read())
-    tag = f'localhost:5001/v2-book:{SOURCE}'
+    from v2_source_patch import apply as apply_source_patch
+    patch_record = apply_source_patch(context)
+    tag = f'localhost:5001/v2-{app}:{SOURCE}-v2-{patch_record["patch_sha256"][:12]}'
     docker('build', '--platform', 'linux/arm64', '--label', f'org.opencontainers.image.revision={SOURCE}', '-t', tag, str(context), capture=False)
     docker('push', tag, capture=False)
     image = json.loads(docker('image', 'inspect', tag))[0]
     if image['Architecture'] != 'arm64':
         raise RuntimeError('ARM64 image 검증 실패')
-    digest = next(x for x in image['RepoDigests'] if x.startswith('localhost:5001/v2-book@sha256:'))
+    digest = next(x for x in image['RepoDigests'] if x.startswith(f'localhost:5001/v2-{app}@sha256:'))
     for env in ENVIRONMENTS:
-        run(['kubectl', 'kustomize', 'apps/book/overlays/' + env])
-        path = ROOT / 'apps/book/overlays' / env / 'kustomization.yaml'
+        run(['kubectl', 'kustomize', f'apps/{app}/overlays/' + env])
+        path = ROOT / f'apps/{app}/overlays' / env / 'kustomization.yaml'
         lines = path.read_text().splitlines()
         lines = [line for line in lines if not line.strip().startswith(('newTag:', 'digest:'))]
         # images newName 뒤 digest 삽입; agent와 합의한 image key 사용
         index = next(i for i, line in enumerate(lines) if line.strip().startswith('newName:'))
-        lines.insert(index + 1, '    digest: ' + digest.split('@')[1])
+        indent = lines[index][:len(lines[index]) - len(lines[index].lstrip())]
+        lines.insert(index + 1, indent + 'digest: ' + digest.split('@')[1])
         path.write_text('\n'.join(lines) + '\n')
-    (LOCAL / 'image.json').write_text(json.dumps({'source': SOURCE, 'source_archive_sha256': hashlib.sha256(archive).hexdigest(), 'image': digest, 'architecture': 'arm64'}, indent=2) + '\n')
-    print('Book ARM64 이미지 빌드·digest 고정 완료:', digest)
+        run(['kubectl', 'kustomize', f'apps/{app}/overlays/' + env])
+    (LOCAL / ('image.json' if app == 'book' else f'{app}-image.json')).write_text(json.dumps({'source': SOURCE, 'source_archive_sha256': hashlib.sha256(archive).hexdigest(), 'patch': patch_record, 'image': digest, 'architecture': 'arm64'}, indent=2) + '\n')
+    print(app + ' ARM64 이미지 빌드·digest 고정 완료:', digest)
 
 
 def credentials(_):
@@ -306,6 +314,22 @@ def credentials(_):
         secret = {'apiVersion': 'v1', 'kind': 'Secret', 'metadata': {'name': 'book-auth', 'namespace': namespace, 'labels': {OWNER: VALUE}},
                   'type': 'Opaque', 'stringData': {'password': secret_path.read_text().strip()}}
         k('apply', '-f', '-', stdin=json.dumps(secret))
+        for app in ('youtube', 'portal'):
+            name = app + '-auth'
+            refuse_foreign('secret', name, namespace)
+            path = LOCAL / f'{app}-{env}-password'
+            if not path.exists():
+                if k('-n', namespace, 'get', 'secret', name, '--ignore-not-found', '-o', 'name').strip():
+                    raise RuntimeError('기존 Secret의 로컬 비밀번호 파일 없음. 자동 재발급 거부')
+                path.write_text(secrets.token_urlsafe(24))
+            path.chmod(0o600)
+            password = path.read_text().strip()
+            data = {'DELETE_PASSWORD': password} if app == 'youtube' else {
+                'FILE_MANAGER_ACCESS_PASSWORD': password, 'ADMIN_STATUS_PASSWORD': password,
+                'PORTFOLIO_ADMIN_PASSWORD': password, 'DELETE_PASSWORD': password}
+            k('apply', '-f', '-', stdin=json.dumps({'apiVersion': 'v1', 'kind': 'Secret',
+                'metadata': {'name': name, 'namespace': namespace, 'labels': {OWNER: VALUE}},
+                'type': 'Opaque', 'stringData': data}))
     path = LOCAL / 'grafana-password'
     if not path.exists():
         path.write_text(secrets.token_urlsafe(24))
@@ -315,6 +339,28 @@ def credentials(_):
         'metadata': {'name': 'grafana-admin', 'namespace': 'v2-observability', 'labels': {OWNER: VALUE}},
         'stringData': {'admin-user': 'admin', 'admin-password': path.read_text().strip()}}))
     print('V2 실습 Secret 준비 PASS (값 출력 없음)')
+    login_info()
+
+
+def login_info():
+    """사용자가 승인한 로컬 로그인 안내. 값은 화면/Git에 출력하지 않음."""
+    rows = [('Portal 개발', 'http://127.0.0.1:8000', 'portal-dev-password'),
+            ('Portal 검증', 'http://127.0.0.1:8090', 'portal-verify-password'),
+            ('YouTube 개발', 'http://127.0.0.1:8002', 'youtube-dev-password'),
+            ('YouTube 검증', 'http://127.0.0.1:8092', 'youtube-verify-password'),
+            ('Book 개발', 'http://127.0.0.1:8080', 'dev-password'),
+            ('Book 검증', 'http://127.0.0.1:8081', 'verify-password'),
+            ('Argo CD (admin)', 'http://localhost:8085', 'argocd-password'),
+            ('Grafana (admin)', 'http://127.0.0.1:8083', 'grafana-password')]
+    content = '# V2 로컬 로그인 정보\n\nGit에 올리지 않는 실습 전용 정보입니다.\n\n| 서비스 | 주소 | 비밀번호 |\n|---|---|---|\n'
+    for name, url, filename in rows:
+        path = LOCAL / filename
+        if path.exists():
+            content += f'| {name} | {url} | {path.read_text().strip()} |\n'
+    content += '\nPortal 비밀번호는 파일함·관리자·포트폴리오 편집에 사용합니다.\nPrometheus: http://127.0.0.1:8084 (로그인 없음)\nArgo 8085는 로컬 인증서 검증 프록시 실행 시 사용합니다.\n'
+    path = LOCAL / 'V2_로그인정보.md'
+    path.write_text(content)
+    path.chmod(0o600)
 
 
 def deploy(args):
@@ -401,7 +447,7 @@ def preflight_root(revision):
     objects = decode_objects(k('create', '--dry-run=client', '--validate=false', '-f', '-', '-o', 'json', stdin=rendered))
     allowed = {'Namespace': {'argocd', 'v2-dev', 'v2-verify', 'v2-observability'},
                'Application': {data[0] for key, data in APPLICATIONS.items() if key != 'root'},
-               'AppProject': {'book-dev', 'book-verify', 'argocd-platform', 'observability'}}
+               'AppProject': {data[1] for data in APPLICATIONS.values() if data[0] != 'v2-root'}}
     for obj in objects:
         kind, meta = obj['kind'], obj['metadata']
         if meta['name'] not in allowed.get(kind, set()) or meta.get('labels', {}).get(OWNER) != VALUE:
@@ -456,6 +502,12 @@ def serve(_):
             for service, port in [('grafana', '8083:80'), ('prometheus', '8084:80')]:
                 if k('-n', 'v2-observability', 'get', 'service', service, '--ignore-not-found', '-o', 'json').strip():
                     endpoints.append(('v2-observability', service, port))
+        for env, namespace in ENVIRONMENTS.items():
+            for service, ports in [('portal', '8000:8000' if env == 'dev' else '8090:8000'),
+                                   ('youtube', '8002:8002' if env == 'dev' else '8092:8002')]:
+                if k('-n', namespace, 'get', 'service', service, '--ignore-not-found', '-o', 'json').strip():
+                    endpoints.append((namespace, service, ports))
+        endpoints.append(('v2-dev', 'book', '8003:8003'))
         for namespace, service, ports in endpoints:
             namespace_guard(namespace)
             log_path = LOCAL / ('forward-' + ports.split(':')[0] + '.log')
@@ -471,7 +523,7 @@ def serve(_):
                 time.sleep(0.1)
             else:
                 raise RuntimeError('port-forward 준비 시간 초과')
-        print('Book :8080/:8081 / Argo https://localhost:8082 / 설치 시 Grafana :8083 / Prometheus :8084 (모두 loopback)', flush=True)
+        print('Portal :8000/:8090 / YouTube :8002/:8092 / Book :8003,:8080/:8081 / Argo https://localhost:8082 / 설치 시 Grafana :8083 / Prometheus :8084 (모두 loopback)', flush=True)
         while all(p.poll() is None for p in children):
             time.sleep(1)
         raise RuntimeError('port-forward 중단됨. serve 재실행 필요')
@@ -591,7 +643,7 @@ def gitops(args):
     from types import SimpleNamespace
     revision = args.revision or run(['git', 'rev-parse', 'HEAD']).strip()
     credentials(args)
-    for name in ('root', 'argocd', 'blackbox', 'prometheus', 'grafana', 'dev', 'verify'):
+    for name in ('root', 'argocd', 'blackbox', 'prometheus', 'grafana', 'dev', 'verify', 'youtube-dev', 'youtube-verify', 'portal-dev', 'portal-verify'):
         sync(SimpleNamespace(environment=name, revision=revision))
 
 
@@ -659,6 +711,7 @@ def main():
     for name in functions:
         p = sub.add_parser(name)
         if name == 'build':
+            p.add_argument('--app', choices=['book', 'youtube', 'portal'], default='book')
             p.add_argument('--source', required=True, help='V1 로컬 Git 저장소. 앱 파일만 git archive로 추출')
         if name == 'sync':
             p.add_argument('environment', choices=APPLICATIONS)

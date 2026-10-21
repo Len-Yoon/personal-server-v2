@@ -1,0 +1,34 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: v2-dev
+resources:
+- ../../base
+labels:
+- pairs:
+    lab.personal-server-v2/environment: dev
+  includeSelectors: false
+  includeTemplates: true
+images:
+- name: localhost:5001/v2-portal
+  newName: localhost:5001/v2-portal
+  digest: sha256:781860f52aa513d1bc667acc32e3e0bcc7a9506e169f0f652d0fff8414a8d657
+patches:
+- patch: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: portal
+    spec:
+      template:
+        spec:
+          containers:
+          - name: portal
+            env:
+            - name: PORTAL_HOME_URL
+              value: http://127.0.0.1:8000
+            - name: V2_COOKIE_PREFIX
+              value: v2_dev_
+            - name: YOUTUBE_MEMO_URL
+              value: http://127.0.0.1:8002
+            - name: BOOK_MEMO_URL
+              value: http://127.0.0.1:8003

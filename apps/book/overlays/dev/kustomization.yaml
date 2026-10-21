@@ -11,4 +11,20 @@ labels:
 images:
   - name: v2-book
     newName: localhost:5001/v2-book
-    digest: sha256:ca0401f57c9957006104e9803d180e57b3888f34631cb86d28cc15fd9a93d5b1
+    digest: sha256:28b2b290d51b634e0e2777b9b325f3e44709055e61bbd1573f0052fb91e1c2ce
+patches:
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: book
+      spec:
+        template:
+          spec:
+            containers:
+              - name: book
+                env:
+                  - name: PORTAL_HOME_URL
+                    value: http://127.0.0.1:8000
+                  - name: V2_COOKIE_PREFIX
+                    value: v2_dev_
