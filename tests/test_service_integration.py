@@ -139,8 +139,32 @@ def portal_home_url():
             with self.assertRaisesRegex(RuntimeError, '계약 불일치'):
                 source_patch.apply(context)
 
+    def test_portal_lists_only_integrated_services(self):
+        with tempfile.TemporaryDirectory() as directory:
+            context = self.fixture(directory)
+            (context / 'app/routers').mkdir()
+            (context / 'app/templates').mkdir()
+            router = context / 'app/routers/dashboard.py'
+            router.write_text('def dashboard():\n    services = [{"icon": icon} for icon in "NTYBFA"]\n'
+                              '    return templates.TemplateResponse(\n'
+                              '        request=request, name="dashboard.html", context={"services": services})\n')
+            template = context / 'app/templates/dashboard.html'
+            template.write_text('PERSONAL SERVER{% if demo_mode %}{% endif %}')
+            source_patch.apply(context)
+            scope = {'request': None, 'templates': SimpleNamespace(TemplateResponse=lambda **kw: kw['context']['services'])}
+            exec(router.read_text(), scope)
+            self.assertEqual([row['icon'] for row in scope['dashboard']()], list('YBFA'))
+            self.assertIn('V2 LOCAL LAB', template.read_text())
+
 
 class RuntimeVerifierTests(unittest.TestCase):
+    def test_foreign_deployment_rejected_before_pod_exec_or_delete(self):
+        deployment = {'metadata': {'uid': 'foreign', 'labels': {}}}
+        with patch.object(services_verification.lab, 'guard'), patch.object(services_verification.lab, 'namespace_guard'), patch.object(services_verification.lab, 'k', return_value=json.dumps(deployment)) as request:
+            with self.assertRaisesRegex(RuntimeError, '소유 불일치'):
+                services_verification.owned_pod('v2-verify', 'youtube')
+            self.assertEqual(request.call_count, 1)
+
     def test_all_generated_remote_python_compiles(self):
         sources = []
         def validate(namespace, service, code):

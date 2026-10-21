@@ -3,7 +3,7 @@
     "source": "23572de06038341fc2ed11714cccde04e9967080",
     "source_archive_sha256": "4154672fab8c0fa854141f2b8dbe7d9f75d3900960bab61185887a5687fde7eb",
     "patch": {
-      "patch_sha256": "96ab83fd1e44fd501e8db02f3bd80feef7cf913ba09f21a186cc4f0c9f408603",
+      "patch_sha256": "8734fc11c9b9d0735203b10105131f57cf9091493bebea840b5ad1831c0ec038",
       "files": [
         "app/services/host_urls.py",
         "app/main.py"
@@ -16,22 +16,24 @@
     "source": "23572de06038341fc2ed11714cccde04e9967080",
     "source_archive_sha256": "cae7b9a2e3cd5390d43c1718bf49dbbc0704c80ad4f1e1323602f9bcb803c2f3",
     "patch": {
-      "patch_sha256": "96ab83fd1e44fd501e8db02f3bd80feef7cf913ba09f21a186cc4f0c9f408603",
+      "patch_sha256": "8734fc11c9b9d0735203b10105131f57cf9091493bebea840b5ad1831c0ec038",
       "files": [
         "app/services/host_urls.py",
         "app/routers/files.py",
         "app/routers/admin.py",
-        "app/routers/portfolio.py"
+        "app/routers/portfolio.py",
+        "app/routers/dashboard.py",
+        "app/templates/dashboard.html"
       ]
     },
-    "image": "localhost:5001/v2-portal@sha256:781860f52aa513d1bc667acc32e3e0bcc7a9506e169f0f652d0fff8414a8d657",
+    "image": "localhost:5001/v2-portal@sha256:4064f66644de281e7f68b72e7104089527cef255c80680fc86b9972558d33e28",
     "architecture": "arm64"
   },
   "youtube": {
     "source": "23572de06038341fc2ed11714cccde04e9967080",
     "source_archive_sha256": "c53c3c5df7bc70e186c3f8004935c73d216c2c148bc1110ab1b9d0073cba7f57",
     "patch": {
-      "patch_sha256": "96ab83fd1e44fd501e8db02f3bd80feef7cf913ba09f21a186cc4f0c9f408603",
+      "patch_sha256": "8734fc11c9b9d0735203b10105131f57cf9091493bebea840b5ad1831c0ec038",
       "files": [
         "app/services/host_urls.py",
         "app/main.py"

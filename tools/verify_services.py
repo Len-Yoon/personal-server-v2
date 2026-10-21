@@ -13,6 +13,10 @@ import lab
 SERVICES = {'portal': 8000, 'youtube': 8002}
 
 
+class ServiceNotReady(RuntimeError):
+    """V2 소유 자원에 아직 Ready Pod가 없는 일시 상태."""
+
+
 def owned_pod(namespace, service):
     lab.guard()
     lab.namespace_guard(namespace)
@@ -26,7 +30,7 @@ def owned_pod(namespace, service):
                   and any(ref.get('uid') in set_uids for ref in pod['metadata'].get('ownerReferences', []))
                   and any(condition.get('type') == 'Ready' and condition.get('status') == 'True' for condition in pod.get('status', {}).get('conditions', []))]
     if len(candidates) != 1:
-        raise RuntimeError(f'{namespace}/{service}: Ready 소유 Pod 1개 필요')
+        raise ServiceNotReady(f'{namespace}/{service}: Ready 소유 Pod 1개 필요')
     return candidates[0]
 
 
@@ -50,7 +54,7 @@ print(json.dumps(result))
 
 
 def book_snapshot(namespace):
-    code = "import os,sqlite3,json; c=sqlite3.connect(os.environ['BOOK_MEMO_DB_PATH']); print(json.dumps({t:c.execute('SELECT COUNT(*) FROM '+t).fetchone()[0] for t in ('books','book_chapters','book_memos')}))"
+    code = "import os,sqlite3,json; from pathlib import Path; c=sqlite3.connect(Path(os.environ['BOOK_MEMO_DB_PATH']).resolve().as_uri()+'?mode=ro',uri=True); print(json.dumps({t:c.execute('SELECT COUNT(*) FROM '+t).fetchone()[0] for t in ('books','book_chapters','book_memos')}))"
     return execute(namespace, 'book', code)
 
 
@@ -127,7 +131,7 @@ def restart_sample(namespace, service):
             current = owned_pod(namespace, service)
             if current['metadata']['uid'] != pod['metadata']['uid']:
                 return {'old_uid': pod['metadata']['uid'], 'new_uid': current['metadata']['uid']}
-        except RuntimeError:
+        except ServiceNotReady:
             pass
         time.sleep(2)
     raise RuntimeError('샘플 Pod 재생성 시간 초과')
@@ -165,8 +169,8 @@ def verify(restart=False, observe=True):
         raise RuntimeError('기존 장애 실습을 먼저 복구해야 함')
     report = {'scope': 'V2 automated Portal/YouTube integration; not user diagnosis', 'cluster_uid': state['cluster_uid'],
               'source_commit': lab.run(['git', 'rev-parse', 'HEAD']).strip(), 'environments': {}}
-    book_before = {namespace: book_snapshot(namespace) for namespace in lab.ENVIRONMENTS.values()}
     try:
+        book_before = {namespace: book_snapshot(namespace) for namespace in lab.ENVIRONMENTS.values()}
         for environment, namespace in lab.ENVIRONMENTS.items():
             result = {'health': {service: http_health(namespace, service) for service in SERVICES}, 'samples': seed_samples(namespace)}
             result['search'] = integrated_search(namespace)
