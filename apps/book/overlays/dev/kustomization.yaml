@@ -11,7 +11,7 @@ labels:
 images:
 - name: v2-book
   newName: localhost:5001/v2-book
-  digest: sha256:442905c6d8413593f2394e564ddef17712910094003083e0687c062fdf2f6e04
+  digest: sha256:8d140c6f517482a35c81f95678125989b8b341cdc3467b9ace09a50a802fc75c
 patches:
 - patch: |-
     apiVersion: apps/v1

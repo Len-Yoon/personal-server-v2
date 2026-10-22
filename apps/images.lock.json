@@ -3,7 +3,7 @@
     "source": "23572de06038341fc2ed11714cccde04e9967080",
     "source_archive_sha256": "4154672fab8c0fa854141f2b8dbe7d9f75d3900960bab61185887a5687fde7eb",
     "patch": {
-      "patch_sha256": "80fbfda7f6cb211ea949bd73f5d95c21980cde180bdca1644de8ffd79a4f9298",
+      "patch_sha256": "fd108f3ebb33c2e861359cdeb602e34d8669202d3cb3793d58b11cdbcbe7b2ca",
       "files": [
         "Dockerfile",
         "app/main.py",
@@ -11,16 +11,16 @@
         "app/v2_telemetry.py",
         "v2-telemetry-requirements.txt"
       ],
-      "telemetry_sha256": "d6d3f190f9bea18db84428ffdaa640c4fe731504f98e9273131731ab5287c5dc"
+      "telemetry_sha256": "6924e3d9598c5948d289492b7f8537c70c7984be3d6b9f1f650609089bb9e393"
     },
-    "image": "localhost:5001/v2-book@sha256:442905c6d8413593f2394e564ddef17712910094003083e0687c062fdf2f6e04",
+    "image": "localhost:5001/v2-book@sha256:8d140c6f517482a35c81f95678125989b8b341cdc3467b9ace09a50a802fc75c",
     "architecture": "arm64"
   },
   "portal": {
     "source": "23572de06038341fc2ed11714cccde04e9967080",
     "source_archive_sha256": "cae7b9a2e3cd5390d43c1718bf49dbbc0704c80ad4f1e1323602f9bcb803c2f3",
     "patch": {
-      "patch_sha256": "80fbfda7f6cb211ea949bd73f5d95c21980cde180bdca1644de8ffd79a4f9298",
+      "patch_sha256": "fd108f3ebb33c2e861359cdeb602e34d8669202d3cb3793d58b11cdbcbe7b2ca",
       "files": [
         "Dockerfile",
         "app/main.py",
@@ -34,16 +34,16 @@
         "app/v2_telemetry.py",
         "v2-telemetry-requirements.txt"
       ],
-      "telemetry_sha256": "d6d3f190f9bea18db84428ffdaa640c4fe731504f98e9273131731ab5287c5dc"
+      "telemetry_sha256": "6924e3d9598c5948d289492b7f8537c70c7984be3d6b9f1f650609089bb9e393"
     },
-    "image": "localhost:5001/v2-portal@sha256:c5f3b0614ce97b36b273eca652a52d4425ccb0514bf7ba96ec7628606834f79e",
+    "image": "localhost:5001/v2-portal@sha256:db7c2358cbcdf4269d5d2892b8366018559993569cf21f5736ab680d7f899664",
     "architecture": "arm64"
   },
   "youtube": {
     "source": "23572de06038341fc2ed11714cccde04e9967080",
     "source_archive_sha256": "c53c3c5df7bc70e186c3f8004935c73d216c2c148bc1110ab1b9d0073cba7f57",
     "patch": {
-      "patch_sha256": "80fbfda7f6cb211ea949bd73f5d95c21980cde180bdca1644de8ffd79a4f9298",
+      "patch_sha256": "fd108f3ebb33c2e861359cdeb602e34d8669202d3cb3793d58b11cdbcbe7b2ca",
       "files": [
         "Dockerfile",
         "app/main.py",
@@ -51,9 +51,9 @@
         "app/v2_telemetry.py",
         "v2-telemetry-requirements.txt"
       ],
-      "telemetry_sha256": "d6d3f190f9bea18db84428ffdaa640c4fe731504f98e9273131731ab5287c5dc"
+      "telemetry_sha256": "6924e3d9598c5948d289492b7f8537c70c7984be3d6b9f1f650609089bb9e393"
     },
-    "image": "localhost:5001/v2-youtube@sha256:2be7c51cb6337089344de97470fd064a62f1a8998c7e05953d362e5903fddf87",
+    "image": "localhost:5001/v2-youtube@sha256:07023628c004643898c7ad46c5200bc2e671d68ffedcdf5968feb66707f48b52",
     "architecture": "arm64"
   }
 }

@@ -211,6 +211,55 @@ class PrivacyTests(unittest.TestCase):
 
 
 class LivePropagationTests(unittest.TestCase):
+    def test_intermediate_native_context_cannot_orphan_clients_or_mix_concurrent_requests(self):
+        sdk, tracer, capture = provider('portal', {'/search'})
+        app = FastAPI()
+        propagated = []
+        async def respond(request):
+            await asyncio.sleep(0.001)
+            propagated.append(otel.PROPAGATOR.extract(dict(request.headers)))
+            return httpx.Response(200)
+        @app.middleware('http')
+        async def intermediate(request, call_next):
+            # V1 BaseHTTPMiddleware/라이브러리가 생성하는, 전송에서 제외될 중간 span.
+            with tracer.start_as_current_span('native intermediary', kind=trace.SpanKind.INTERNAL):
+                await asyncio.sleep(0)
+                return await call_next(request)
+        @app.get('/search')
+        async def fanout():
+            with tracer.start_as_current_span('native route intermediary', kind=trace.SpanKind.INTERNAL):
+                transport = otel.InternalTransport(tracer, httpx.MockTransport(respond))
+                async with httpx.AsyncClient(transport=transport) as client:
+                    await asyncio.gather(client.get('http://book:8003/api/search'), client.get('http://youtube:8002/api/search'))
+                record = logging.LogRecord('uvicorn.access', logging.INFO, '', 1, 'fixed', (), None)
+                otel.TraceLogFilter().filter(record)
+                return {'prefix': record.v2_trace_prefix}
+        app.add_middleware(otel.ServerMiddleware, tracer=tracer, routes={'/search'})
+        async def run():
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app)) as client:
+                return await asyncio.gather(*(client.get('http://portal/search') for _ in range(12)))
+        try:
+            # 서버 요청 시작 전에도 ambient span이 있어도 새 서버 root에는 혼입하지 않음.
+            with tracer.start_as_current_span('ambient outside request'):
+                responses = asyncio.run(run())
+            servers = [span for span in capture.spans if span.kind == trace.SpanKind.SERVER]
+            clients = [span for span in capture.spans if span.kind == trace.SpanKind.CLIENT]
+            self.assertEqual(len(servers), 12)
+            self.assertEqual(len(clients), 24)
+            self.assertEqual(len({span.context.trace_id for span in servers}), 12)
+            for server in servers:
+                self.assertIsNone(server.parent)
+                descendants = [span for span in clients if span.context.trace_id == server.context.trace_id]
+                self.assertEqual(len(descendants), 2)
+                self.assertTrue(all(span.parent.span_id == server.context.span_id for span in descendants))
+                self.assertTrue(any(response.json()['prefix'] == f'trace_id={server.context.trace_id:032x} span_id={server.context.span_id:016x} '
+                                    for response in responses))
+            self.assertEqual({trace.get_current_span(context).get_span_context().span_id for context in propagated},
+                             {span.context.span_id for span in clients})
+            self.assertIsNone(otel._request_context.get())
+        finally:
+            sdk.shutdown()
+
     def test_three_real_http_servers_async_fanout_exclusions_errors_and_log_prefix(self):
         servers, threads, sockets, sdks, captures, ports = [], [], [], [], {}, {}
         access = []

@@ -8,6 +8,7 @@ import httpx
 import requests
 from starlette.routing import compile_path
 from opentelemetry import trace
+from opentelemetry.context import Context
 from opentelemetry.propagators.textmap import DefaultGetter
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 from opentelemetry.sdk.resources import Resource
@@ -22,6 +23,7 @@ PROPAGATOR = TraceContextTextMapPropagator()  # baggage는 읽거나 전달하�
 _tracer = None
 _service = None
 _error_context = ContextVar('v2_error_trace', default=None)
+_request_context = ContextVar('v2_http_server_context', default=None)
 
 
 def method_name(value):
@@ -90,6 +92,9 @@ class PrivateExporter(SpanExporter):
 class TraceLogFilter(logging.Filter):
     def filter(self, record):
         context = trace.get_current_span().get_span_context()
+        request_context = _request_context.get()
+        if request_context is not None:
+            context = trace.get_current_span(request_context).get_span_context()
         if not context.is_valid:
             context = _error_context.get() or context
         record.v2_trace_prefix = (f'trace_id={context.trace_id:032x} span_id={context.span_id:016x} '
@@ -120,9 +125,10 @@ class ServerMiddleware:
             return await self.app(scope, receive, send)
         method = method_name(scope.get('method'))
         headers = {key.decode('latin1'): value.decode('latin1') for key, value in scope.get('headers', ()) if key.lower() == b'traceparent'}
-        parent = PROPAGATOR.extract(headers, getter=DefaultGetter())
+        parent = PROPAGATOR.extract(headers, context=Context(), getter=DefaultGetter())
         with self.tracer.start_as_current_span('HTTP server', context=parent, kind=trace.SpanKind.SERVER,
                 attributes={'http.request.method': method}, record_exception=False, set_status_on_exception=False) as span:
+            token = _request_context.set(trace.set_span_in_context(span, Context()))
             async def traced_send(message):
                 if message['type'] == 'http.response.start':
                     span.set_attribute('http.response.status_code', message['status'])
@@ -142,6 +148,8 @@ class ServerMiddleware:
                 # Uvicorn은 ASGI 예외가 반환된 뒤 로깅함. 현재 요청 task에만 ID를 유지함.
                 _error_context.set(span.get_span_context())
                 raise
+            finally:
+                _request_context.reset(token)
 
 
 class InternalTransport(httpx.AsyncBaseTransport):
@@ -158,7 +166,7 @@ class InternalTransport(httpx.AsyncBaseTransport):
                    and (url.host, url.port) in {('book', 8003), ('youtube', 8002)})
         if not allowed or self.tracer is None:
             return await self.transport.handle_async_request(request)
-        with self.tracer.start_as_current_span('HTTP client', kind=trace.SpanKind.CLIENT,
+        with self.tracer.start_as_current_span('HTTP client', context=_request_context.get() or Context(), kind=trace.SpanKind.CLIENT,
                 attributes={'http.request.method': method_name(request.method), 'http.route': '/api/search'},
                 record_exception=False, set_status_on_exception=False) as span:
             PROPAGATOR.inject(request.headers)

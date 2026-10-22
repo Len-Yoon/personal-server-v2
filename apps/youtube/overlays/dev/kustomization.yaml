@@ -11,7 +11,7 @@ labels:
 images:
 - name: localhost:5001/v2-youtube
   newName: localhost:5001/v2-youtube
-  digest: sha256:2be7c51cb6337089344de97470fd064a62f1a8998c7e05953d362e5903fddf87
+  digest: sha256:07023628c004643898c7ad46c5200bc2e671d68ffedcdf5968feb66707f48b52
 patches:
 - patch: |
     apiVersion: apps/v1
