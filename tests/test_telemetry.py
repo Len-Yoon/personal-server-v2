@@ -4,8 +4,10 @@ import logging
 import os
 from pathlib import Path
 import socket
+import subprocess
 import sys
 import tempfile
+import textwrap
 import threading
 import time
 import unittest
@@ -45,6 +47,69 @@ def provider(service, routes):
 
 
 class PrivacyTests(unittest.TestCase):
+    def test_patched_constructor_blocks_native_exporters_during_real_lifespan_in_subprocess(self):
+        with tempfile.TemporaryDirectory() as directory:
+            context = Path(directory)
+            (context / 'app').mkdir()
+            (context / 'app/__init__.py').write_text('')
+            (context / 'app/main.py').write_text('from fastapi import FastAPI\napp = FastAPI(title="V2 fixture")\n'
+                '@app.get("/health")\nasync def health(): return {"ok": True}\n'
+                '@app.get("/search")\nasync def search(): return {"ok": True}\n')
+            (context / 'app/v2_telemetry.py').write_bytes((ROOT / 'tools/telemetry/v2_telemetry.py').read_bytes())
+            apply_telemetry(context)
+            script = textwrap.dedent('''
+                from unittest.mock import patch
+                from types import SimpleNamespace
+                from starlette.testclient import TestClient
+                from fastapi.telemetry import _runtime
+                from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import ExportTraceServiceRequest
+                import app.v2_telemetry as telemetry
+                providers, payloads = [], []
+                original_provider = telemetry.TracerProvider
+                def make_provider(*args, **kwargs):
+                    provider = original_provider(*args, **kwargs)
+                    providers.append(provider)
+                    return provider
+                def post(session, url, **kwargs):
+                    assert url == telemetry.ENDPOINT + '/v1/traces'
+                    request = ExportTraceServiceRequest.FromString(kwargs['data'])
+                    payloads.append(request)
+                    return SimpleNamespace(status_code=200)
+                original_configure = _runtime._configure_from_environment
+                seen = []
+                def inspect_config(config):
+                    seen.append(config)
+                    assert all(config[key] is False for key in ('auto_configure', 'tracing', 'metrics', 'logs', 'operation_spans'))
+                    return original_configure(config)
+                with patch.object(telemetry, 'TracerProvider', side_effect=make_provider), \\
+                     patch('requests.Session.post', new=post), \\
+                     patch.object(_runtime, '_configure_from_environment', side_effect=inspect_config), \\
+                     patch('opentelemetry.exporter.otlp.proto.http.trace_exporter.OTLPSpanExporter') as native_trace, \\
+                     patch('opentelemetry.exporter.otlp.proto.http.metric_exporter.OTLPMetricExporter') as native_metrics, \\
+                     patch('opentelemetry.exporter.otlp.proto.http._log_exporter.OTLPLogExporter') as native_logs:
+                    from app.main import app
+                    with TestClient(app) as client:
+                        assert client.get('/health').status_code == 200
+                        assert client.get('/search?q=synthetic-query&token=synthetic-token', headers={'Authorization': 'synthetic-header'}).status_code == 200
+                    assert len(seen) == 1
+                    assert len(providers) == 1
+                    providers[0].force_flush()
+                    native_trace.assert_not_called()
+                    native_metrics.assert_not_called()
+                    native_logs.assert_not_called()
+                    spans = [span for payload in payloads for resource in payload.resource_spans for scope in resource.scope_spans for span in scope.spans]
+                    assert len(spans) == 1
+                    assert spans[0].name == 'HTTP server GET /search'
+                    assert all(value not in payload.SerializeToString() for payload in payloads for value in (b'synthetic-query', b'synthetic-token', b'synthetic-header', b'/health'))
+                    providers[0].shutdown()
+                print('native exporters disabled; private-only lifespan export verified')
+            ''')
+            env = dict(os.environ, OTEL_SERVICE_NAME='portal', V2_ENVIRONMENT='dev', OTEL_EXPORTER_OTLP_ENDPOINT=otel.ENDPOINT)
+            result = subprocess.run([sys.executable, '-c', script], cwd=context, env=env,
+                                    capture_output=True, text=True, timeout=20)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn('private-only lifespan export verified', result.stdout)
+
     def test_included_and_nested_router_templates_are_exported_without_user_values(self):
         app, router, nested = FastAPI(), APIRouter(), APIRouter()
         @router.get('/')

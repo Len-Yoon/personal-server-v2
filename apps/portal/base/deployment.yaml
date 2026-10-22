@@ -99,6 +99,12 @@ spec:
           value: http://127.0.0.1:9
         - name: OTEL_SERVICE_NAME
           value: portal
+        - name: OTEL_TRACES_EXPORTER
+          value: none
+        - name: OTEL_METRICS_EXPORTER
+          value: none
+        - name: OTEL_LOGS_EXPORTER
+          value: none
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
           value: http://alloy.v2-observability.svc.cluster.local:4318
         resources:

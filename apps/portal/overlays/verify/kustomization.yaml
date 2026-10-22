@@ -11,7 +11,7 @@ labels:
 images:
 - name: localhost:5001/v2-portal
   newName: localhost:5001/v2-portal
-  digest: sha256:db7c2358cbcdf4269d5d2892b8366018559993569cf21f5736ab680d7f899664
+  digest: sha256:615da84f73d1b9f02f7583ea705a7a2da63d121f97c183b0f533321739eb41ea
 patches:
 - patch: |
     apiVersion: apps/v1

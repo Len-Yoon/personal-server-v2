@@ -10,6 +10,11 @@ def apply_telemetry(context: Path):
     content = main.read_text()
     if content.count('app = FastAPI(') != 1 or 'v2_telemetry' in content:
         raise RuntimeError('V2 telemetry main patch contract mismatch')
+    # FastAPI 0.142는 lifespan에서 env endpoint를 보고 별도 native exporter를 만듦.
+    # 자체 PrivateExporter 외의 trace/metric/log 전송 경로를 생성자에서 차단함.
+    content = content.replace('app = FastAPI(',
+        'app = FastAPI(telemetry={"auto_configure": False, "tracing": False, '
+        '"metrics": False, "logs": False, "operation_spans": False}, ', 1)
     content += '\n# V2 전용 명시 HTTP 계측 (모든 라우트 등록 이후 초기화)\nfrom app.v2_telemetry import configure as configure_v2_telemetry\nconfigure_v2_telemetry(app)\n'
     changed = ['app/main.py']
     search = context / 'app/services/global_search.py'

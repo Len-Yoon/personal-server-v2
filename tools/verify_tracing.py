@@ -131,6 +131,41 @@ def correlate(trace_id, environment, start_ns):
     raise RuntimeError('세 앱 Loki trace ID 로그 연결 시간 초과')
 
 
+def check_image_export(namespace, service):
+    """배포 이미지의 실제 앱 lifespan을 별도 프로세스로 실행하고 송신 직전 payload를 검사함."""
+    code = r'''import json,os
+from types import SimpleNamespace
+from unittest.mock import patch
+from fastapi.testclient import TestClient
+from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import ExportTraceServiceRequest
+from fastapi.telemetry import _runtime
+from app.main import app
+from app import v2_telemetry as telemetry
+captured=[]
+def post(session,url,**kwargs):
+ assert url==telemetry.ENDPOINT+'/v1/traces'
+ captured.append(kwargs['data'])
+ return SimpleNamespace(status_code=200)
+for signal in ('TRACES','METRICS','LOGS'):
+ assert os.environ['OTEL_'+signal+'_EXPORTER']=='none'
+with patch('requests.Session.post',post):
+ with TestClient(app) as client:
+  assert client.get('/health').status_code==200
+  response=client.get('/v2-export-boundary?token=v2-image-private-fixture',headers={'Authorization':'Bearer v2-image-private-fixture','Cookie':'synthetic=v2-image-private-fixture'})
+  assert response.status_code==404
+  assert telemetry._tracer._active_span_processor.force_flush(10000)
+ assert not _runtime._owned and not _runtime._configured
+ assert len(captured)==1
+ message=ExportTraceServiceRequest.FromString(captured[0])
+ assert b'v2-image-private-fixture' not in captured[0] and b'v2-export-boundary' not in captured[0]
+ spans=[span for resource in message.resource_spans for scope in resource.scope_spans for span in scope.spans]
+ assert len(spans)==1 and spans[0].name=='HTTP server GET unmatched'
+ assert all(not span.events and not span.links and not span.status.message for span in spans)
+print(json.dumps({'native_exporters':0,'private_export_requests':len(captured),'sanitized_spans':len(spans),'health_spans':0,'result':'PASS'}))
+'''
+    return execute(namespace, service, code)
+
+
 def tempo_pod():
     stateful = owned_object('v2-observability', 'statefulset', 'tempo')
     pods = json.loads(lab.k('-n', 'v2-observability', 'get', 'pods', '-l', 'app.kubernetes.io/name=tempo', '-o', 'json'))['items']
@@ -175,7 +210,7 @@ def verify_retention(traces):
                 'pvc_uid': pvc['metadata']['uid'], 'retained_traces': len(traces), 'alloy_absent_during_readback': True}
 
 
-def verify(restart=False):
+def verify(restart=False, image_export=False):
     state = lab.guard()
     if any((lab.LOCAL / name).exists() for name in ('exercise.json', 'logging-collector-pause.json')):
         raise RuntimeError('미복구 장애 실습/수집기 중지 기록 존재')
@@ -186,6 +221,9 @@ def verify(restart=False):
         raise RuntimeError('계측 전 기존 앱/PVC/Secret UID/hash와 불일치')
     report = {'source_commit': lab.run(['git', 'rev-parse', 'HEAD']).strip(), 'cluster_uid': state['cluster_uid'], 'result': 'FAIL'}
     try:
+        if image_export:
+            report['image_export_boundary'] = {namespace: {service: check_image_export(namespace, service)
+                for service in ('book', 'portal', 'youtube')} for namespace in lab.ENVIRONMENTS.values()}
         start_ns = time.time_ns() - 60_000_000_000
         report['traces'] = []
         for environment, namespace in lab.ENVIRONMENTS.items():
@@ -211,4 +249,6 @@ def verify(restart=False):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--restart-tempo', action='store_true', help='Alloy를 잠시 멈추고 UID 전제조건으로 Tempo Pod만 재생성하여 동일 PVC의 이전 trace 조회')
-    verify(parser.parse_args().restart_tempo)
+    parser.add_argument('--check-image-export', action='store_true', help='각 배포 이미지의 별도 앱 lifespan에서 native 전송0·정제 exporter만 동작하는지 검사')
+    args = parser.parse_args()
+    verify(args.restart_tempo, args.check_image_export)
