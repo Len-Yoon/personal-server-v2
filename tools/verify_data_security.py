@@ -42,9 +42,10 @@ def main():
      attempts=backup.wait_database(env)
      r=backup.pg(['psql','-X','--no-password','-At','-c','SELECT count(*) FROM public.notes'],env)
      assert backup.pg(['psql','-X','--no-password','-At','-c',"SELECT has_table_privilege('notes_backup','public.notes','INSERT')"],env)=='f'
-     try:backup.pg(['psql','-X','--no-password','-v','ON_ERROR_STOP=1','-c',"BEGIN; INSERT INTO public.notes(id,title) VALUES ('11111111-1111-1111-1111-111111111111','denied'); ROLLBACK;"],env)
-     except RuntimeError:print(json.dumps({'select':'ALLOWED','insert':'DENIED','ready_attempts':attempts}))
-     else:raise RuntimeError('backup INSERT allowed')
+     import subprocess
+     attempted=subprocess.run(['psql','-X','--no-password','-v','ON_ERROR_STOP=1','--set=VERBOSITY=sqlstate','-c',"BEGIN; INSERT INTO public.notes(id,title) VALUES ('11111111-1111-1111-1111-111111111111','denied'); ROLLBACK;"],env=env,capture_output=True,text=True,timeout=15)
+     if attempted.returncode and '42501' in attempted.stderr:print(json.dumps({'select':'ALLOWED','insert':'DENIED','sqlstate':'42501','ready_attempts':attempts}))
+     else:raise RuntimeError('backup INSERT 거부 SQLSTATE 확인 실패')
     """
     spec['template']['spec']['containers'][0]['command']=['python3','-c',dedent(cmd)]
     name='v2-data-permissions-'+uuid.uuid4().hex[:8];ns=d.NAMESPACES[0]

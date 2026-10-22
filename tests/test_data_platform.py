@@ -52,3 +52,20 @@ class DataTests(unittest.TestCase):
   with patch.object(lab.subprocess,'run',side_effect=lab.subprocess.TimeoutExpired(['docker'],10,output='secret-content')):
    with self.assertRaisesRegex(RuntimeError,'응답 시간 초과') as error:lab.run(['docker'],timeout=10)
    self.assertNotIn('secret-content',str(error.exception))
+
+ def test_rebuild_updates_approved_policy_and_workloads_together(self):
+  import build_data
+  with tempfile.TemporaryDirectory() as tmp:
+   root=Path(tmp);old={k:{'image':'old-'+k} for k in ('api','postgres')};new={k:{'image':'new-'+k} for k in old}
+   for env in ('dev','restore','policies'):
+    p=root/'platforms/data'/env/'resources.yaml';p.parent.mkdir(parents=True);p.write_text('old-api old-postgres')
+   with patch.object(lab,'ROOT',root):build_data.update_manifests(old,new)
+   self.assertTrue(all((root/'platforms/data'/env/'resources.yaml').read_text()=='new-api new-postgres' for env in ('dev','restore','policies')))
+ def test_rebuild_mismatched_policy_does_not_partially_write(self):
+  import build_data
+  with tempfile.TemporaryDirectory() as tmp:
+   root=Path(tmp);old={k:{'image':'old-'+k} for k in ('api','postgres')};new={k:{'image':'new-'+k} for k in old}
+   for env in ('dev','restore','policies'):
+    p=root/'platforms/data'/env/'resources.yaml';p.parent.mkdir(parents=True);p.write_text('old-api old-postgres' if env!='policies' else 'unexpected')
+   with patch.object(lab,'ROOT',root),self.assertRaises(RuntimeError):build_data.update_manifests(old,new)
+   self.assertEqual((root/'platforms/data/dev/resources.yaml').read_text(),'old-api old-postgres')
