@@ -9,6 +9,7 @@ V1의 Portal·Book·YouTube 고정 소스를 재사용하고, 맥북에 GitOps·
 | V1 | [personal-server](https://github.com/Len-Yoon/personal-server)의 실제 서비스 운영·유지보수 | 기존 저장소·운영 구성 보존 |
 | V2 | 맥북 로컬 Kubernetes 운영 실습 | V1 전체 복제·즉시 대체 아님 |
 | 현재 상태 | 세 앱 연계·GitOps·지표·로그·trace·보안·별도 PostgreSQL 백업 복원 검증 완료 | 최근 main 검증18개 Argo 앱·24개 관측 대상 정상 |
+| 최근 배포 | 메모 API 1.1.0의 코드 변경·이미지 빌드·PR·CI·Argo 적용·보존 검증 완료 | [배포 실습 결과](docs/20261022_V2_메모API_배포실습.md), 사용자 직접 실행과 구분 |
 | 현재 우선순위 | 사용자가 직접 정상 상태·로그·이벤트·장애·복원을 확인하는 실습 | 폐쇄망 보류, SBOM·서명 검증 미구현 |
 | 운영 보호 | N100 접속·동기화·이미지 반입·배포·운영 데이터 사용 제외 | 별도 명시 승인 전 금지 |
 
@@ -37,7 +38,10 @@ python3 tools/lab.py serve
 | Grafana 로그 | http://localhost:8083/d/v2-logs | 환경·서비스별 Loki 로그 검색 |
 | Prometheus | http://localhost:8084 | 지표·targets·내부 alert 조회 |
 | Grafana 요청 추적 | http://localhost:8083/d/v2-traces/v2-traces | Portal→Book/YouTube 요청과 로그 연계 |
+| 메모 API 버전 | http://localhost:8086/version | 서비스명·앱 버전1.1.0 확인, 인증 불필요 |
 | 별도 메모 API | http://localhost:8086/health / http://localhost:8086/ready | 프로세스·DB 접근 상태, 메모 API는 Bearer 인증 |
+
+현재 CI는 테스트·설정을 검사함. 앱 이미지 빌드·로컬 registry 등록과 Git 이미지 명세 갱신은 직접 실행하며, main 병합 후 Argo 수동 Sync로 배포함. [메모 API 배포 실습](docs/20261022_V2_메모API_배포실습.md)에 실제 순서와 결과를 기록함.
 
 정상 배포는 `lab.py gitops` 또는 `lab.py sync`로 수행함. 기존 Argo에 Helm upgrade를 반복하지 않음. 최초 설치·이미지 빌드·배포는 로컬 실습 가이드에 따름. 포워딩 프로세스를 유지해야 접속 가능하며 localhost 주소만 입력해서 클러스터가 자동 시작되지는 않음. 비밀번호 파일 내용은 Git·로그에 기록하지 않음.
 
