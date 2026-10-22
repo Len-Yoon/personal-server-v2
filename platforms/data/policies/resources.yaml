@@ -36,7 +36,7 @@ spec:
     message: "\uC784\uC2DC \uCEE8\uD14C\uC774\uB108 \uAE08\uC9C0"
   - expression: '(object.spec.containers + (has(object.spec.initContainers) ? object.spec.initContainers
       : [])).all(c, c.image in [''localhost:5001/v2-notes-api@sha256:b383c33b6a358fbb20dbdacaf019f8ccc0b0362cb76d5490b8b6ac67b208b2d3'',
-      ''localhost:5001/v2-data-postgres@sha256:d1964d89a514799e0b930c13f8afb4e7ac4bf913c8eba48369c4aed2a7a024a2'']
+      ''localhost:5001/v2-data-postgres@sha256:0ec426da1ac6743acc9577094574534ab69e3f43380446208f272976a338630d'']
       && has(c.resources) && has(c.resources.requests) && has(c.resources.limits)
       && ''cpu'' in c.resources.requests && ''memory'' in c.resources.requests &&
       ''cpu'' in c.resources.limits && ''memory'' in c.resources.limits && quantity(string(c.resources.requests.cpu)).compareTo(quantity(''0''))>0

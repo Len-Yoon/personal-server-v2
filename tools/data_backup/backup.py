@@ -13,6 +13,7 @@ import shutil
 import stat
 import subprocess
 import tempfile
+import time
 import uuid
 
 ID_PATTERN = re.compile(r'^[0-9]{8}T[0-9]{12}Z-[0-9a-f]{8}$')
@@ -111,16 +112,32 @@ def authenticated_env(mode):
             Path(temp).unlink(missing_ok=True)
 
 
-def pg(command, env, *, pass_fds=()):
+def pg(command, env, *, pass_fds=(), timeout=240):
     try:
         result = subprocess.run(command, env=env, capture_output=True, text=True,
-                                timeout=240, pass_fds=pass_fds, check=False)
+                                timeout=timeout, pass_fds=pass_fds, check=False)
     except (OSError, subprocess.SubprocessError):
         raise RuntimeError('PostgreSQL 도구 실행 실패') from None
     if result.returncode:
         raise RuntimeError('PostgreSQL 작업 실패: 인증 값 보호를 위해 상세 출력 생략')
     return result.stdout.strip()
 
+
+
+def wait_database(env, timeout=45):
+    """새 Job의 통신 정책 반영·DB 준비 지연은 읽기 전용 쿼리로만 재시도함."""
+    deadline=time.monotonic()+timeout
+    attempts=0
+    while True:
+        attempts+=1
+        remaining=deadline-time.monotonic()
+        if remaining<=0:raise RuntimeError('백업/복구 DB 준비 시간 초과')
+        try:
+            if pg(['psql','-X','--no-password','-At','-v','ON_ERROR_STOP=1','-c','SELECT 1'],env,timeout=min(10,remaining))=='1':return attempts
+        except RuntimeError:
+            pass
+        if time.monotonic()>=deadline:raise RuntimeError('백업/복구 DB 준비 시간 초과')
+        time.sleep(1)
 
 def checksum(fd):
     os.lseek(fd, 0, os.SEEK_SET)
@@ -259,7 +276,9 @@ def main():
                 result = inventory(root)
             else:
                 with authenticated_env(args.action) as env:
+                    ready_attempts=wait_database(env)
                     result = backup(root, env) if args.action == 'backup' else restore(root, env, args.backup_id)
+                    result['database_ready_attempts']=ready_attempts
         print(json.dumps(result, sort_keys=True))
     except (OSError, RuntimeError, ValueError, UnicodeError):
         # pgpass/Secret 및 libpq 오류 문자열을 stdout/stderr에 내보내지 않음.

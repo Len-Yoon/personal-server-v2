@@ -109,7 +109,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: postgres
-        image: localhost:5001/v2-data-postgres@sha256:d1964d89a514799e0b930c13f8afb4e7ac4bf913c8eba48369c4aed2a7a024a2
+        image: localhost:5001/v2-data-postgres@sha256:0ec426da1ac6743acc9577094574534ab69e3f43380446208f272976a338630d
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
@@ -370,7 +370,7 @@ spec:
               type: RuntimeDefault
           containers:
           - name: backup
-            image: localhost:5001/v2-data-postgres@sha256:d1964d89a514799e0b930c13f8afb4e7ac4bf913c8eba48369c4aed2a7a024a2
+            image: localhost:5001/v2-data-postgres@sha256:0ec426da1ac6743acc9577094574534ab69e3f43380446208f272976a338630d
             securityContext:
               allowPrivilegeEscalation: false
               readOnlyRootFilesystem: true
@@ -454,7 +454,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: transfer
-        image: localhost:5001/v2-data-postgres@sha256:d1964d89a514799e0b930c13f8afb4e7ac4bf913c8eba48369c4aed2a7a024a2
+        image: localhost:5001/v2-data-postgres@sha256:0ec426da1ac6743acc9577094574534ab69e3f43380446208f272976a338630d
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true

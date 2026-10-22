@@ -152,3 +152,13 @@ class BackupTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ReadinessTests(unittest.TestCase):
+    def test_new_job_readiness_retries_only_read_query(self):
+        with patch.object(backup,'pg',side_effect=[RuntimeError('connection refused'),'1']) as pg,patch.object(backup.time,'sleep'):
+            self.assertEqual(backup.wait_database({}),2)
+            self.assertTrue(all(c.args[0][-1]=='SELECT 1' for c in pg.call_args_list))
+    def test_readiness_failure_is_bounded(self):
+        with patch.object(backup,'pg',side_effect=RuntimeError('secret')),patch.object(backup.time,'monotonic',side_effect=[0,2]),patch.object(backup.time,'sleep'):
+            with self.assertRaisesRegex(RuntimeError,'준비 시간 초과'):backup.wait_database({},timeout=1)

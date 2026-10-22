@@ -230,7 +230,7 @@ def up(_):
     docker('volume', 'create', '--label', f'{OWNER}={VALUE}', '--label', label, 'k3d-ps-v2-images')
     data['volumes']['k3d-ps-v2-images'] = volume_identity('k3d-ps-v2-images')
     journal_write(data)
-    docker('run', '-d', '--name', 'ps-v2-registry', '--label', f'{OWNER}={VALUE}', '--label', label,
+    docker('run', '-d', '--restart', 'unless-stopped', '--name', 'ps-v2-registry', '--label', f'{OWNER}={VALUE}', '--label', label,
            '--network', 'ps-v2', '-p', '127.0.0.1:5001:5000', '--memory', '256m', '--cpus', '0.5', dependency['registry'])
     record_created(data)
     config_text = (ROOT / 'platforms/k3d/cluster.yaml').read_text()
