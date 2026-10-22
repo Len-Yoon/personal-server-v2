@@ -1,8 +1,8 @@
 {
   "api": {
-    "image": "localhost:5001/v2-notes-api@sha256:b383c33b6a358fbb20dbdacaf019f8ccc0b0362cb76d5490b8b6ac67b208b2d3",
+    "image": "localhost:5001/v2-notes-api@sha256:71cc6dbb9ec24f57df7f76e830f140ed2a99f3ec4c3c3c3f467224aa1922cd3f",
     "base": "python:3.12-slim-bookworm@sha256:6a0e06f5ba0b373d051aabd3fffb9b873f27f9a2a3a14bcbe37dee6f0e3bbc70",
-    "source_sha256": "12b7f80ad626a13ff2772bc42d3eba3588ca4fcb5de258e3a68b800ebd218593",
+    "source_sha256": "f0a35525ec7bc9e0eed6524b3c06622266be2d6467fedcc195ea776432073bc0",
     "architecture": "arm64"
   },
   "postgres": {

@@ -34,7 +34,7 @@ spec:
     message: "API \uD1A0\uD070 \uC9C1\uC811 \uD22C\uC601 \uAE08\uC9C0"
   - expression: '!has(object.spec.ephemeralContainers) || size(object.spec.ephemeralContainers)==0'
     message: "\uC784\uC2DC \uCEE8\uD14C\uC774\uB108 \uAE08\uC9C0"
-  - expression: object.spec.containers.all(c, c.image in ['localhost:5001/v2-notes-api@sha256:b383c33b6a358fbb20dbdacaf019f8ccc0b0362cb76d5490b8b6ac67b208b2d3',
+  - expression: object.spec.containers.all(c, c.image in ['localhost:5001/v2-notes-api@sha256:71cc6dbb9ec24f57df7f76e830f140ed2a99f3ec4c3c3c3f467224aa1922cd3f',
       'localhost:5001/v2-data-postgres@sha256:0ec426da1ac6743acc9577094574534ab69e3f43380446208f272976a338630d']
       && has(c.resources) && has(dyn(c.resources).requests) && has(dyn(c.resources).limits)
       && 'cpu' in dyn(c.resources).requests && 'memory' in dyn(c.resources).requests
@@ -46,7 +46,7 @@ spec:
       && quantity(string(dyn(c.resources).limits.cpu)).compareTo(quantity('1'))<=0
       && quantity(string(dyn(c.resources).limits.memory)).compareTo(quantity('1Gi'))<=0)
       && (!has(object.spec.initContainers) || object.spec.initContainers.all(c, c.image
-      in ['localhost:5001/v2-notes-api@sha256:b383c33b6a358fbb20dbdacaf019f8ccc0b0362cb76d5490b8b6ac67b208b2d3',
+      in ['localhost:5001/v2-notes-api@sha256:71cc6dbb9ec24f57df7f76e830f140ed2a99f3ec4c3c3c3f467224aa1922cd3f',
       'localhost:5001/v2-data-postgres@sha256:0ec426da1ac6743acc9577094574534ab69e3f43380446208f272976a338630d']
       && has(c.resources) && has(dyn(c.resources).requests) && has(dyn(c.resources).limits)
       && 'cpu' in dyn(c.resources).requests && 'memory' in dyn(c.resources).requests

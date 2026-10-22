@@ -227,7 +227,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: api
-        image: localhost:5001/v2-notes-api@sha256:b383c33b6a358fbb20dbdacaf019f8ccc0b0362cb76d5490b8b6ac67b208b2d3
+        image: localhost:5001/v2-notes-api@sha256:71cc6dbb9ec24f57df7f76e830f140ed2a99f3ec4c3c3c3f467224aa1922cd3f
         securityContext: &id001
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
@@ -285,7 +285,7 @@ spec:
           defaultMode: 288
       initContainers:
       - name: migrate
-        image: localhost:5001/v2-notes-api@sha256:b383c33b6a358fbb20dbdacaf019f8ccc0b0362cb76d5490b8b6ac67b208b2d3
+        image: localhost:5001/v2-notes-api@sha256:71cc6dbb9ec24f57df7f76e830f140ed2a99f3ec4c3c3c3f467224aa1922cd3f
         securityContext: *id001
         resources:
           requests:
