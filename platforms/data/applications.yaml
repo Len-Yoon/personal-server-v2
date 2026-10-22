@@ -1,0 +1,143 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: data-dev
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+  namespace: argocd
+spec:
+  sourceRepos:
+  - ssh://git@github.com/Len-Yoon/personal-server-v2.git
+  destinations:
+  - server: https://kubernetes.default.svc
+    namespace: v2-data-dev
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+  - group: ''
+    kind: Service
+  - group: ''
+    kind: PersistentVolumeClaim
+  - group: ''
+    kind: ServiceAccount
+  - group: ''
+    kind: ResourceQuota
+  - group: apps
+    kind: Deployment
+  - group: apps
+    kind: StatefulSet
+  - group: batch
+    kind: CronJob
+  - group: networking.k8s.io
+    kind: NetworkPolicy
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: data-dev
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+  namespace: argocd
+spec:
+  project: data-dev
+  source:
+    repoURL: ssh://git@github.com/Len-Yoon/personal-server-v2.git
+    targetRevision: main
+    path: platforms/data/dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: v2-data-dev
+  syncPolicy:
+    syncOptions:
+    - FailOnSharedResource=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: data-restore
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+  namespace: argocd
+spec:
+  sourceRepos:
+  - ssh://git@github.com/Len-Yoon/personal-server-v2.git
+  destinations:
+  - server: https://kubernetes.default.svc
+    namespace: v2-data-restore
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+  - group: ''
+    kind: Service
+  - group: ''
+    kind: PersistentVolumeClaim
+  - group: ''
+    kind: ServiceAccount
+  - group: ''
+    kind: ResourceQuota
+  - group: apps
+    kind: Deployment
+  - group: apps
+    kind: StatefulSet
+  - group: batch
+    kind: CronJob
+  - group: networking.k8s.io
+    kind: NetworkPolicy
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: data-restore
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+  namespace: argocd
+spec:
+  project: data-restore
+  source:
+    repoURL: ssh://git@github.com/Len-Yoon/personal-server-v2.git
+    targetRevision: main
+    path: platforms/data/restore
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: v2-data-restore
+  syncPolicy:
+    syncOptions:
+    - FailOnSharedResource=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: data-policy
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+  namespace: argocd
+spec:
+  sourceRepos:
+  - ssh://git@github.com/Len-Yoon/personal-server-v2.git
+  destinations:
+  - server: https://kubernetes.default.svc
+    namespace: v2-data-dev
+  clusterResourceWhitelist:
+  - group: admissionregistration.k8s.io
+    kind: ValidatingAdmissionPolicy
+  - group: admissionregistration.k8s.io
+    kind: ValidatingAdmissionPolicyBinding
+  namespaceResourceWhitelist: []
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: data-policy
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+  namespace: argocd
+spec:
+  project: data-policy
+  source:
+    repoURL: ssh://git@github.com/Len-Yoon/personal-server-v2.git
+    targetRevision: main
+    path: platforms/data/policies
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: v2-data-dev
+  syncPolicy:
+    syncOptions:
+    - FailOnSharedResource=true

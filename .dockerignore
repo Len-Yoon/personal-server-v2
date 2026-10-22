@@ -1,0 +1,8 @@
+**
+!tools/
+!tools/data_image/
+!tools/data_image/**
+!tools/data_backup/
+!tools/data_backup/**
+**/__pycache__/**
+**/*.pyc

@@ -1,0 +1,14 @@
+{
+  "api": {
+    "image": "localhost:5001/v2-notes-api@sha256:b383c33b6a358fbb20dbdacaf019f8ccc0b0362cb76d5490b8b6ac67b208b2d3",
+    "base": "python:3.12-slim-bookworm@sha256:6a0e06f5ba0b373d051aabd3fffb9b873f27f9a2a3a14bcbe37dee6f0e3bbc70",
+    "source_sha256": "12b7f80ad626a13ff2772bc42d3eba3588ca4fcb5de258e3a68b800ebd218593",
+    "architecture": "arm64"
+  },
+  "postgres": {
+    "image": "localhost:5001/v2-data-postgres@sha256:0ec426da1ac6743acc9577094574534ab69e3f43380446208f272976a338630d",
+    "base": "postgres:17-bookworm@sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27",
+    "source_sha256": "a05e0691620120f68ffe86da0893cd840fb9be87cf7059465634d9de437ba638",
+    "architecture": "arm64"
+  }
+}

@@ -21,3 +21,25 @@ metadata:
     lab.personal-server-v2/environment: verify
     pod-security.kubernetes.io/enforce: restricted
     pod-security.kubernetes.io/enforce-version: v1.35
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: v2-data-dev
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.35
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: v2-data-restore
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.35
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false

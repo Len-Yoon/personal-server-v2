@@ -29,6 +29,9 @@ MISSING_IMAGE = 'localhost:5001/v2-book@sha256:' + '0' * 64
 REGISTRY = 'registry:2.8.3'  # dependencies.json의 digest로 실행
 ENVIRONMENTS = {'dev': 'v2-dev', 'verify': 'v2-verify'}
 APPLICATIONS = {
+    'data-dev': ('data-dev', 'data-dev', 'platforms/data/dev', 'v2-data-dev', ['statefulset/postgres','deployment/notes-api','deployment/backup-transfer']),
+    'data-restore': ('data-restore', 'data-restore', 'platforms/data/restore', 'v2-data-restore', ['statefulset/postgres','deployment/backup-transfer']),
+    'data-policy': ('data-policy', 'data-policy', 'platforms/data/policies', 'v2-data-dev', []),
     'dev': ('book-dev', 'book-dev', 'apps/book/overlays/dev', 'v2-dev', ['deployment/book']),
     'verify': ('book-verify', 'book-verify', 'apps/book/overlays/verify', 'v2-verify', ['deployment/book']),
     **{f'{app}-{env}': (f'{app}-{env}', f'{app}-{env}', f'apps/{app}/overlays/{env}', ns, [f'deployment/{app}'])
@@ -46,15 +49,18 @@ APPLICATIONS = {
 }
 
 
-def run(args, *, stdin=None, capture=True, check=True):
+def run(args, *, stdin=None, capture=True, check=True, timeout=None):
     env = os.environ.copy()
     for key in list(env):
         if key.startswith('HELM_KUBE') or key in ('KUBECONFIG', 'DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH'):
             env.pop(key, None)
     env['DOCKER_CONTEXT'] = 'orbstack'
     env['PATH'] = str(ROOT / '.tools/bin') + os.pathsep + env.get('PATH', '')
-    result = subprocess.run([str(x) for x in args], input=stdin, text=True,
-                            capture_output=capture, env=env, cwd=ROOT)
+    try:
+        result = subprocess.run([str(x) for x in args], input=stdin, text=True,
+                                capture_output=capture, env=env, cwd=ROOT, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f'{args[0]} 응답 시간 초과 (상세 비출력)') from None
     if check and result.returncode:
         # Secret이 stdin/stdout에 있을 수 있어 command 출력과 stdout은 예외에 넣지 않음.
         detail = result.stderr if capture else '화면 출력 참조'
@@ -65,7 +71,7 @@ def run(args, *, stdin=None, capture=True, check=True):
 
 
 def docker(*args, **kwargs):
-    endpoint = run(['docker', 'context', 'inspect', 'orbstack', '--format', '{{.Endpoints.docker.Host}}']).strip()
+    endpoint = run(['docker', 'context', 'inspect', 'orbstack', '--format', '{{.Endpoints.docker.Host}}'], timeout=10).strip()
     expected = f'unix://{Path.home()}/.orbstack/run/docker.sock'
     if endpoint != expected:
         raise RuntimeError('OrbStack 로컬 소켓 불일치. 실행 거부')
@@ -157,7 +163,7 @@ def kube_config_valid(config):
 
 
 def container_owned(name):
-    obj = json.loads(docker('inspect', name))[0]
+    obj = json.loads(docker('inspect', name, timeout=10))[0]
     if obj['Config'].get('Labels', {}).get(OWNER) != VALUE:
         raise RuntimeError(f'{name}: V2 소유 표식 없음')
     return obj
@@ -224,7 +230,7 @@ def up(_):
     docker('volume', 'create', '--label', f'{OWNER}={VALUE}', '--label', label, 'k3d-ps-v2-images')
     data['volumes']['k3d-ps-v2-images'] = volume_identity('k3d-ps-v2-images')
     journal_write(data)
-    docker('run', '-d', '--name', 'ps-v2-registry', '--label', f'{OWNER}={VALUE}', '--label', label,
+    docker('run', '-d', '--restart', 'unless-stopped', '--name', 'ps-v2-registry', '--label', f'{OWNER}={VALUE}', '--label', label,
            '--network', 'ps-v2', '-p', '127.0.0.1:5001:5000', '--memory', '256m', '--cpus', '0.5', dependency['registry'])
     record_created(data)
     config_text = (ROOT / 'platforms/k3d/cluster.yaml').read_text()
@@ -387,6 +393,13 @@ def login_info():
         path = LOCAL / filename
         if path.exists():
             content += f'| {name} | {url} | {read_private(path).decode().strip()} |\n'
+    for namespace in ('v2-data-dev', 'v2-data-restore'):
+        for role in ('admin','owner','app','backup','token'):
+            credential = LOCAL / (namespace + '-' + role)
+            if credential.exists():
+                address = 'http://localhost:8086/health' if namespace == 'v2-data-dev' and role == 'token' else '클러스터 내부 전용'
+                content += f'| {namespace} {role} | {address} | {read_private(credential).decode().strip()} |\n'
+    content += '\n메모 API는 Authorization 헤더에 Bearer 토큰을 사용합니다. DB는 localhost로 공개하지 않습니다.\n'
     content += '\nPortal 비밀번호는 파일함·관리자·포트폴리오 편집에 사용합니다.\nPrometheus: http://127.0.0.1:8084 (로그인 없음)\nArgo 8085는 로컬 인증서 검증 프록시 실행 시 사용합니다.\n'
     path = LOCAL / 'V2_로그인정보.md'
     replace_private(path, content.encode())
@@ -477,7 +490,7 @@ def preflight_root(revision):
         raise RuntimeError('root sync는 검토할 SHA로 checkout하고 platforms 변경을 커밋한 상태에서 실행해야 함')
     rendered = k('kustomize', 'platforms/gitops/root')
     objects = decode_objects(k('create', '--dry-run=client', '--validate=false', '-f', '-', '-o', 'json', stdin=rendered))
-    allowed = {'Namespace': {'argocd', 'v2-dev', 'v2-verify', 'v2-observability'},
+    allowed = {'Namespace': {'argocd', 'v2-dev', 'v2-verify', 'v2-observability', 'v2-data-dev', 'v2-data-restore'},
                'Application': {data[0] for key, data in APPLICATIONS.items() if key != 'root'},
                'AppProject': {data[1] for data in APPLICATIONS.values() if data[0] != 'v2-root'}}
     for obj in objects:
@@ -523,6 +536,9 @@ def sync(args):
     if args.environment == 'security':
         from security_guard import preflight
         preflight(args.revision)
+    if args.environment.startswith('data-'):
+        from data_lab import preflight
+        preflight(args.environment, args.revision)
     before = application_guard(args.environment)
     if before.get('operation') or before.get('status', {}).get('operationState', {}).get('phase') == 'Running':
         raise RuntimeError('기존 sync 진행 중')
@@ -569,6 +585,10 @@ def serve(_):
                                    ('youtube', '8002:8002' if env == 'dev' else '8092:8002')]:
                 if k('-n', namespace, 'get', 'service', service, '--ignore-not-found', '-o', 'json').strip():
                     endpoints.append((namespace, service, ports))
+        if k('get','namespace','v2-data-dev','--ignore-not-found','-o','name').strip():
+            namespace_guard('v2-data-dev')
+            if k('-n','v2-data-dev','get','service','notes-api','--ignore-not-found','-o','name').strip():
+                endpoints.append(('v2-data-dev','notes-api','8086:8000'))
         endpoints.append(('v2-dev', 'book', '8003:8003'))
         for namespace, service, ports in endpoints:
             namespace_guard(namespace)
@@ -706,7 +726,10 @@ def gitops(args):
     from types import SimpleNamespace
     revision = args.revision or run(['git', 'rev-parse', 'HEAD']).strip()
     credentials(args)
-    for name in ('root', 'argocd', 'blackbox', 'loki', 'tempo', 'alloy', 'prometheus', 'grafana', 'dev', 'verify', 'youtube-dev', 'youtube-verify', 'portal-dev', 'portal-verify', 'security'):
+    for name in ('root', 'argocd', 'blackbox', 'loki', 'tempo', 'alloy', 'prometheus', 'grafana', 'dev', 'verify', 'youtube-dev', 'youtube-verify', 'portal-dev', 'portal-verify', 'security', 'data-policy', 'data-dev', 'data-restore'):
+        if name == 'data-policy':
+            from data_lab import credentials as data_credentials
+            data_credentials()
         sync(SimpleNamespace(environment=name, revision=revision))
 
 
