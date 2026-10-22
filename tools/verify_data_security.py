@@ -24,6 +24,9 @@ def main():
     """
     result['cross_namespace_db']=d.execute(d.NAMESPACES[0],'notes-api',dedent(code),pg).strip();assert result['cross_namespace_db']=='BLOCKED'
     base=d.owned(d.NAMESPACES[0],'deployment','notes-api')['spec']['template']
+    valid={'apiVersion':'v1','kind':'Pod','metadata':{'name':'v2-data-valid-'+uuid.uuid4().hex[:8],'namespace':d.NAMESPACES[0],**copy.deepcopy(base['metadata'])},'spec':copy.deepcopy(base['spec'])}
+    lab.k('create','--dry-run=server','-f','-',stdin=json.dumps(valid))
+    result['valid_api']='ALLOWED'
     for change in ('image_tag','token','zero_cpu','owner_removed'):
      p={'apiVersion':'v1','kind':'Pod','metadata':{'name':'v2-data-dryrun-'+uuid.uuid4().hex[:8],'namespace':d.NAMESPACES[0],**copy.deepcopy(base['metadata'])},'spec':copy.deepcopy(base['spec'])}
      if change=='image_tag':p['spec']['containers'][0]['image']='localhost:5001/v2-notes-api:latest'
