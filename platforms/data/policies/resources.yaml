@@ -36,23 +36,27 @@ spec:
     message: "\uC784\uC2DC \uCEE8\uD14C\uC774\uB108 \uAE08\uC9C0"
   - expression: object.spec.containers.all(c, c.image in ['localhost:5001/v2-notes-api@sha256:b383c33b6a358fbb20dbdacaf019f8ccc0b0362cb76d5490b8b6ac67b208b2d3',
       'localhost:5001/v2-data-postgres@sha256:0ec426da1ac6743acc9577094574534ab69e3f43380446208f272976a338630d']
-      && has(c.resources) && has(c.resources.requests) && has(c.resources.limits)
-      && 'cpu' in c.resources.requests && 'memory' in c.resources.requests && 'cpu'
-      in c.resources.limits && 'memory' in c.resources.limits && quantity(string(c.resources.requests.cpu)).compareTo(quantity('0'))>0
-      && quantity(string(c.resources.requests.memory)).compareTo(quantity('0'))>0
-      && quantity(string(c.resources.requests.cpu)).compareTo(quantity(string(c.resources.limits.cpu)))<=0
-      && quantity(string(c.resources.requests.memory)).compareTo(quantity(string(c.resources.limits.memory)))<=0
-      && quantity(string(c.resources.limits.cpu)).compareTo(quantity('1'))<=0 && quantity(string(c.resources.limits.memory)).compareTo(quantity('1Gi'))<=0)
+      && has(c.resources) && has(dyn(c.resources).requests) && has(dyn(c.resources).limits)
+      && 'cpu' in dyn(c.resources).requests && 'memory' in dyn(c.resources).requests
+      && 'cpu' in dyn(c.resources).limits && 'memory' in dyn(c.resources).limits &&
+      quantity(string(dyn(c.resources).requests.cpu)).compareTo(quantity('0'))>0 &&
+      quantity(string(dyn(c.resources).requests.memory)).compareTo(quantity('0'))>0
+      && quantity(string(dyn(c.resources).requests.cpu)).compareTo(quantity(string(dyn(c.resources).limits.cpu)))<=0
+      && quantity(string(dyn(c.resources).requests.memory)).compareTo(quantity(string(dyn(c.resources).limits.memory)))<=0
+      && quantity(string(dyn(c.resources).limits.cpu)).compareTo(quantity('1'))<=0
+      && quantity(string(dyn(c.resources).limits.memory)).compareTo(quantity('1Gi'))<=0)
       && (!has(object.spec.initContainers) || object.spec.initContainers.all(c, c.image
       in ['localhost:5001/v2-notes-api@sha256:b383c33b6a358fbb20dbdacaf019f8ccc0b0362cb76d5490b8b6ac67b208b2d3',
       'localhost:5001/v2-data-postgres@sha256:0ec426da1ac6743acc9577094574534ab69e3f43380446208f272976a338630d']
-      && has(c.resources) && has(c.resources.requests) && has(c.resources.limits)
-      && 'cpu' in c.resources.requests && 'memory' in c.resources.requests && 'cpu'
-      in c.resources.limits && 'memory' in c.resources.limits && quantity(string(c.resources.requests.cpu)).compareTo(quantity('0'))>0
-      && quantity(string(c.resources.requests.memory)).compareTo(quantity('0'))>0
-      && quantity(string(c.resources.requests.cpu)).compareTo(quantity(string(c.resources.limits.cpu)))<=0
-      && quantity(string(c.resources.requests.memory)).compareTo(quantity(string(c.resources.limits.memory)))<=0
-      && quantity(string(c.resources.limits.cpu)).compareTo(quantity('1'))<=0 && quantity(string(c.resources.limits.memory)).compareTo(quantity('1Gi'))<=0))
+      && has(c.resources) && has(dyn(c.resources).requests) && has(dyn(c.resources).limits)
+      && 'cpu' in dyn(c.resources).requests && 'memory' in dyn(c.resources).requests
+      && 'cpu' in dyn(c.resources).limits && 'memory' in dyn(c.resources).limits &&
+      quantity(string(dyn(c.resources).requests.cpu)).compareTo(quantity('0'))>0 &&
+      quantity(string(dyn(c.resources).requests.memory)).compareTo(quantity('0'))>0
+      && quantity(string(dyn(c.resources).requests.cpu)).compareTo(quantity(string(dyn(c.resources).limits.cpu)))<=0
+      && quantity(string(dyn(c.resources).requests.memory)).compareTo(quantity(string(dyn(c.resources).limits.memory)))<=0
+      && quantity(string(dyn(c.resources).limits.cpu)).compareTo(quantity('1'))<=0
+      && quantity(string(dyn(c.resources).limits.memory)).compareTo(quantity('1Gi'))<=0))
     message: "\uC2B9\uC778 digest\uC640 CPU/\uBA54\uBAA8\uB9AC \uC608\uC0B0 \uD544\
       \uC694"
 ---
