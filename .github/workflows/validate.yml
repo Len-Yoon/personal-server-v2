@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: 검증 의존성
         run: |
-          python3 -m pip install PyYAML==6.0.3 fastapi==0.142.2 uvicorn==0.34.0 httpx==0.28.1 -r tools/telemetry/requirements.txt
+          python3 -m pip install PyYAML==6.0.3 fastapi==0.142.2 uvicorn==0.34.0 httpx==0.28.1 -r tools/telemetry/requirements.txt -r apps/notes-api/requirements.txt
           python3 -c 'import fastapi, httpx, uvicorn, opentelemetry.sdk.trace'
           curl -fsSLo kubectl https://dl.k8s.io/release/v1.35.5/bin/linux/amd64/kubectl
           curl -fsSLo kubectl.sha256 https://dl.k8s.io/release/v1.35.5/bin/linux/amd64/kubectl.sha256

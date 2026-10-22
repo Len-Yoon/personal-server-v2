@@ -1,0 +1,60 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: v2-data-workloads
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups:
+      - ''
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - pods
+      - pods/ephemeralcontainers
+  matchConditions:
+  - name: data-namespaces
+    expression: request.namespace in ['v2-data-dev', 'v2-data-restore']
+  validations:
+  - expression: has(object.metadata.labels) && 'lab.personal-server-v2/owner' in object.metadata.labels
+      && object.metadata.labels['lab.personal-server-v2/owner']=='personal-server-v2'
+    message: "V2 data \uC18C\uC720 \uD45C\uC2DD \uD544\uC694"
+  - expression: has(object.spec.serviceAccountName) && object.spec.serviceAccountName
+      in ['notes-api','notes-db','notes-backup'] && has(object.spec.automountServiceAccountToken)
+      && object.spec.automountServiceAccountToken==false
+    message: "\uC804\uC6A9 SA \uBC0F token \uBE44\uD65C\uC131\uD654 \uD544\uC694"
+  - expression: '!has(object.spec.volumes) || object.spec.volumes.all(v,!has(v.projected)
+      || !v.projected.sources.exists(s,has(s.serviceAccountToken)))'
+    message: "API \uD1A0\uD070 \uC9C1\uC811 \uD22C\uC601 \uAE08\uC9C0"
+  - expression: '!has(object.spec.ephemeralContainers) || size(object.spec.ephemeralContainers)==0'
+    message: "\uC784\uC2DC \uCEE8\uD14C\uC774\uB108 \uAE08\uC9C0"
+  - expression: '(object.spec.containers + (has(object.spec.initContainers) ? object.spec.initContainers
+      : [])).all(c, c.image in [''localhost:5001/v2-notes-api@sha256:b383c33b6a358fbb20dbdacaf019f8ccc0b0362cb76d5490b8b6ac67b208b2d3'',
+      ''localhost:5001/v2-data-postgres@sha256:d1964d89a514799e0b930c13f8afb4e7ac4bf913c8eba48369c4aed2a7a024a2'']
+      && has(c.resources) && has(c.resources.requests) && has(c.resources.limits)
+      && ''cpu'' in c.resources.requests && ''memory'' in c.resources.requests &&
+      ''cpu'' in c.resources.limits && ''memory'' in c.resources.limits && quantity(string(c.resources.requests.cpu)).compareTo(quantity(''0''))>0
+      && quantity(string(c.resources.requests.memory)).compareTo(quantity(''0''))>0
+      && quantity(string(c.resources.requests.cpu)).compareTo(quantity(string(c.resources.limits.cpu)))<=0
+      && quantity(string(c.resources.requests.memory)).compareTo(quantity(string(c.resources.limits.memory)))<=0
+      && quantity(string(c.resources.limits.cpu)).compareTo(quantity(''1''))<=0 &&
+      quantity(string(c.resources.limits.memory)).compareTo(quantity(''1Gi''))<=0)'
+    message: "\uC2B9\uC778 digest\uC640 CPU/\uBA54\uBAA8\uB9AC \uC608\uC0B0 \uD544\
+      \uC694"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: v2-data-workloads
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+spec:
+  policyName: v2-data-workloads
+  validationActions:
+  - Deny

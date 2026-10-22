@@ -29,6 +29,9 @@ MISSING_IMAGE = 'localhost:5001/v2-book@sha256:' + '0' * 64
 REGISTRY = 'registry:2.8.3'  # dependencies.json의 digest로 실행
 ENVIRONMENTS = {'dev': 'v2-dev', 'verify': 'v2-verify'}
 APPLICATIONS = {
+    'data-dev': ('data-dev', 'data-dev', 'platforms/data/dev', 'v2-data-dev', ['statefulset/postgres','deployment/notes-api','deployment/backup-transfer']),
+    'data-restore': ('data-restore', 'data-restore', 'platforms/data/restore', 'v2-data-restore', ['statefulset/postgres','deployment/backup-transfer']),
+    'data-policy': ('data-policy', 'data-policy', 'platforms/data/policies', 'v2-data-dev', []),
     'dev': ('book-dev', 'book-dev', 'apps/book/overlays/dev', 'v2-dev', ['deployment/book']),
     'verify': ('book-verify', 'book-verify', 'apps/book/overlays/verify', 'v2-verify', ['deployment/book']),
     **{f'{app}-{env}': (f'{app}-{env}', f'{app}-{env}', f'apps/{app}/overlays/{env}', ns, [f'deployment/{app}'])
@@ -477,7 +480,7 @@ def preflight_root(revision):
         raise RuntimeError('root sync는 검토할 SHA로 checkout하고 platforms 변경을 커밋한 상태에서 실행해야 함')
     rendered = k('kustomize', 'platforms/gitops/root')
     objects = decode_objects(k('create', '--dry-run=client', '--validate=false', '-f', '-', '-o', 'json', stdin=rendered))
-    allowed = {'Namespace': {'argocd', 'v2-dev', 'v2-verify', 'v2-observability'},
+    allowed = {'Namespace': {'argocd', 'v2-dev', 'v2-verify', 'v2-observability', 'v2-data-dev', 'v2-data-restore'},
                'Application': {data[0] for key, data in APPLICATIONS.items() if key != 'root'},
                'AppProject': {data[1] for data in APPLICATIONS.values() if data[0] != 'v2-root'}}
     for obj in objects:
@@ -523,6 +526,9 @@ def sync(args):
     if args.environment == 'security':
         from security_guard import preflight
         preflight(args.revision)
+    if args.environment.startswith('data-'):
+        from data_lab import preflight
+        preflight(args.environment, args.revision)
     before = application_guard(args.environment)
     if before.get('operation') or before.get('status', {}).get('operationState', {}).get('phase') == 'Running':
         raise RuntimeError('기존 sync 진행 중')
@@ -569,6 +575,10 @@ def serve(_):
                                    ('youtube', '8002:8002' if env == 'dev' else '8092:8002')]:
                 if k('-n', namespace, 'get', 'service', service, '--ignore-not-found', '-o', 'json').strip():
                     endpoints.append((namespace, service, ports))
+        if k('get','namespace','v2-data-dev','--ignore-not-found','-o','name').strip():
+            namespace_guard('v2-data-dev')
+            if k('-n','v2-data-dev','get','service','notes-api','--ignore-not-found','-o','name').strip():
+                endpoints.append(('v2-data-dev','notes-api','8086:8000'))
         endpoints.append(('v2-dev', 'book', '8003:8003'))
         for namespace, service, ports in endpoints:
             namespace_guard(namespace)
@@ -706,7 +716,10 @@ def gitops(args):
     from types import SimpleNamespace
     revision = args.revision or run(['git', 'rev-parse', 'HEAD']).strip()
     credentials(args)
-    for name in ('root', 'argocd', 'blackbox', 'loki', 'tempo', 'alloy', 'prometheus', 'grafana', 'dev', 'verify', 'youtube-dev', 'youtube-verify', 'portal-dev', 'portal-verify', 'security'):
+    for name in ('root', 'argocd', 'blackbox', 'loki', 'tempo', 'alloy', 'prometheus', 'grafana', 'dev', 'verify', 'youtube-dev', 'youtube-verify', 'portal-dev', 'portal-verify', 'security', 'data-policy', 'data-dev', 'data-restore'):
+        if name == 'data-policy':
+            from data_lab import credentials as data_credentials
+            data_credentials()
         sync(SimpleNamespace(environment=name, revision=revision))
 
 
