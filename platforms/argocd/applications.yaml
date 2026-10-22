@@ -8,22 +8,26 @@ metadata:
 spec:
   description: V2 개발 Book 실습 전용
   sourceRepos:
-    - ssh://git@github.com/Len-Yoon/personal-server-v2.git
+  - ssh://git@github.com/Len-Yoon/personal-server-v2.git
   destinations:
-    - server: https://kubernetes.default.svc
-      namespace: v2-dev
+  - server: https://kubernetes.default.svc
+    namespace: v2-dev
   clusterResourceWhitelist: []
   namespaceResourceWhitelist:
-    - group: ""
-      kind: Service
-    - group: ""
-      kind: PersistentVolumeClaim
-    - group: ""
-      kind: ResourceQuota
-    - group: ""
-      kind: LimitRange
-    - group: apps
-      kind: Deployment
+  - group: ''
+    kind: Service
+  - group: ''
+    kind: PersistentVolumeClaim
+  - group: ''
+    kind: ResourceQuota
+  - group: ''
+    kind: LimitRange
+  - group: apps
+    kind: Deployment
+  - group: ''
+    kind: ServiceAccount
+  - group: networking.k8s.io
+    kind: NetworkPolicy
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
@@ -35,22 +39,26 @@ metadata:
 spec:
   description: V2 검증 Book 실습 전용
   sourceRepos:
-    - ssh://git@github.com/Len-Yoon/personal-server-v2.git
+  - ssh://git@github.com/Len-Yoon/personal-server-v2.git
   destinations:
-    - server: https://kubernetes.default.svc
-      namespace: v2-verify
+  - server: https://kubernetes.default.svc
+    namespace: v2-verify
   clusterResourceWhitelist: []
   namespaceResourceWhitelist:
-    - group: ""
-      kind: Service
-    - group: ""
-      kind: PersistentVolumeClaim
-    - group: ""
-      kind: ResourceQuota
-    - group: ""
-      kind: LimitRange
-    - group: apps
-      kind: Deployment
+  - group: ''
+    kind: Service
+  - group: ''
+    kind: PersistentVolumeClaim
+  - group: ''
+    kind: ResourceQuota
+  - group: ''
+    kind: LimitRange
+  - group: apps
+    kind: Deployment
+  - group: ''
+    kind: ServiceAccount
+  - group: networking.k8s.io
+    kind: NetworkPolicy
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -68,10 +76,9 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: v2-dev
-  # 최초 수동 동기화로 장애 주입 중 자동 복구와의 충돌을 방지함.
   syncPolicy:
     syncOptions:
-      - FailOnSharedResource=true
+    - FailOnSharedResource=true
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -91,4 +98,4 @@ spec:
     namespace: v2-verify
   syncPolicy:
     syncOptions:
-      - FailOnSharedResource=true
+    - FailOnSharedResource=true

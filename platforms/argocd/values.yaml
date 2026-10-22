@@ -33,6 +33,9 @@ argo-cd:
       limits: {cpu: "1", memory: 768Mi}
   repoServer:
     replicas: 1
+    automountServiceAccountToken: false
+    serviceAccount:
+      automountServiceAccountToken: false
     metrics:
       enabled: true
     resources:
@@ -51,6 +54,9 @@ argo-cd:
       limits: {cpu: 500m, memory: 384Mi}
   redis:
     enabled: true
+    automountServiceAccountToken: false
+    serviceAccount:
+      automountServiceAccountToken: false
     resources:
       requests: {cpu: 50m, memory: 64Mi}
       limits: {cpu: 250m, memory: 256Mi}

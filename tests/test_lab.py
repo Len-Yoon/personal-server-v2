@@ -169,7 +169,7 @@ class ManifestTests(unittest.TestCase):
         for env in ('dev', 'verify'):
             rendered = subprocess.check_output(['kubectl', 'kustomize', str(ROOT / 'apps/book/overlays' / env)], text=True)
             objects = list(yaml.safe_load_all(rendered))
-            self.assertEqual({o['kind'] for o in objects}, {'Deployment', 'Service', 'PersistentVolumeClaim', 'ResourceQuota', 'LimitRange'})
+            self.assertEqual({o['kind'] for o in objects}, {'Deployment', 'Service', 'PersistentVolumeClaim', 'ResourceQuota', 'LimitRange', 'ServiceAccount', 'NetworkPolicy'})
             for obj in objects:
                 self.assertEqual(obj['metadata']['namespace'], 'v2-' + env)
                 self.assertEqual(obj['metadata']['labels'][lab.OWNER], lab.VALUE)

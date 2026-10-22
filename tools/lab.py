@@ -40,6 +40,7 @@ APPLICATIONS = {
     'loki': ('loki', 'logging', 'platforms/observability/logging/loki', 'v2-observability', ['statefulset/loki']),
     'alloy': ('alloy', 'logging', 'platforms/observability/logging/alloy', 'v2-observability', ['deployment/alloy']),
     'tempo': ('tempo', 'logging', 'platforms/observability/tracing/tempo', 'v2-observability', ['statefulset/tempo']),
+    'security': ('security', 'security', 'platforms/security/policies', 'v2-dev', []),
     'blackbox': ('blackbox', 'observability', 'platforms/observability/blackbox', 'v2-observability', ['deployment/blackbox']),
 }
 
@@ -312,55 +313,66 @@ def build(args):
     print(app + ' ARM64 이미지 빌드·digest 고정 완료:', digest)
 
 
+def credential_secret(namespace, name):
+    """값을 읽기 전에 소유 표식·UID 확인. 존재하지 않으면 None."""
+    identity = k('-n', namespace, 'get', 'secret', name, '--ignore-not-found',
+                 '-o=jsonpath={.metadata.uid}{"\\n"}{.metadata.labels.lab\\.personal-server-v2/owner}').splitlines()
+    if not identity or not identity[0]:
+        return None
+    if len(identity) != 2 or identity[1] != VALUE:
+        raise RuntimeError('기존 인증 Secret 소유 불일치')
+    obj = json.loads(k('-n', namespace, 'get', 'secret', name, '-o', 'json'))
+    if obj['metadata']['uid'] != identity[0] or obj['metadata'].get('labels', {}).get(OWNER) != VALUE:
+        raise RuntimeError('인증 Secret 조회 중 교체 감지')
+    return obj
+
+
 def credentials(_):
-    """GitOps 밖에서 관리하는 로컬 실습 자격 증명만 생성함."""
+    """전체 파일·기존 Secret을 먼저 검증하고 신규 실습 자격 증명만 생성함."""
+    from secret_files import preflight_password, commit_password
     guard()
+    namespaces = {}
     for namespace in [*ENVIRONMENTS.values(), 'v2-observability']:
         refuse_foreign('namespace', namespace)
-        existing = k('get', 'namespace', namespace, '--ignore-not-found', '-o', 'json').strip()
-        if not existing:
-            # Secret 생성에 필요한 최소 namespace. 정책/완전한 명세는 root가 인수함.
-            k('create', '-f', '-', stdin=json.dumps({'apiVersion': 'v1', 'kind': 'Namespace', 'metadata': {'name': namespace, 'labels': {OWNER: VALUE}}}))
+        namespaces[namespace] = bool(k('get', 'namespace', namespace, '--ignore-not-found', '-o', 'name').strip())
+    requests = []
     for env, namespace in ENVIRONMENTS.items():
+        requests.extend([(namespace, 'book-auth', LOCAL / f'{env}-password', ('password',), {}),
+            (namespace, 'youtube-auth', LOCAL / f'youtube-{env}-password', ('DELETE_PASSWORD',), {}),
+            (namespace, 'portal-auth', LOCAL / f'portal-{env}-password',
+             ('FILE_MANAGER_ACCESS_PASSWORD', 'ADMIN_STATUS_PASSWORD', 'PORTFOLIO_ADMIN_PASSWORD', 'DELETE_PASSWORD'), {})])
+    requests.append(('v2-observability', 'grafana-admin', LOCAL / 'grafana-password', ('admin-password',), {'admin-user': 'admin'}))
+    prepared = []
+    for namespace, name, path, keys, constants in requests:
+        existing = credential_secret(namespace, name) if namespaces[namespace] else None
+        plan = preflight_password(path, existing.get('data', {}) if existing else None, keys, constants)
+        prepared.append((namespace, name, existing, plan))
+    # 어떤 파일/Secret도 모든 사전 검증을 통과하기 전에 쓰지 않음.
+    for _, _, _, plan in prepared:
+        commit_password(plan)
+    for namespace, exists in namespaces.items():
+        if not exists:
+            k('create', '-f', '-', stdin=json.dumps({'apiVersion': 'v1', 'kind': 'Namespace',
+                'metadata': {'name': namespace, 'labels': {OWNER: VALUE}}}))
         namespace_guard(namespace)
-        refuse_foreign('secret', 'book-auth', namespace)
-        secret_path = LOCAL / f'{env}-password'
-        if not secret_path.exists():
-            secret_path.write_text(secrets.token_urlsafe(24))
-            secret_path.chmod(0o600)
-        secret = {'apiVersion': 'v1', 'kind': 'Secret', 'metadata': {'name': 'book-auth', 'namespace': namespace, 'labels': {OWNER: VALUE}},
-                  'type': 'Opaque', 'stringData': {'password': secret_path.read_text().strip()}}
-        k('apply', '-f', '-', stdin=json.dumps(secret))
-        for app in ('youtube', 'portal'):
-            name = app + '-auth'
-            refuse_foreign('secret', name, namespace)
-            path = LOCAL / f'{app}-{env}-password'
-            if not path.exists():
-                if k('-n', namespace, 'get', 'secret', name, '--ignore-not-found', '-o', 'name').strip():
-                    raise RuntimeError('기존 Secret의 로컬 비밀번호 파일 없음. 자동 재발급 거부')
-                path.write_text(secrets.token_urlsafe(24))
-            path.chmod(0o600)
-            password = path.read_text().strip()
-            data = {'DELETE_PASSWORD': password} if app == 'youtube' else {
-                'FILE_MANAGER_ACCESS_PASSWORD': password, 'ADMIN_STATUS_PASSWORD': password,
-                'PORTFOLIO_ADMIN_PASSWORD': password, 'DELETE_PASSWORD': password}
-            k('apply', '-f', '-', stdin=json.dumps({'apiVersion': 'v1', 'kind': 'Secret',
-                'metadata': {'name': name, 'namespace': namespace, 'labels': {OWNER: VALUE}},
-                'type': 'Opaque', 'stringData': data}))
-    path = LOCAL / 'grafana-password'
-    if not path.exists():
-        path.write_text(secrets.token_urlsafe(24))
-        path.chmod(0o600)
-    refuse_foreign('secret', 'grafana-admin', 'v2-observability')
-    k('apply', '-f', '-', stdin=json.dumps({'apiVersion': 'v1', 'kind': 'Secret',
-        'metadata': {'name': 'grafana-admin', 'namespace': 'v2-observability', 'labels': {OWNER: VALUE}},
-        'stringData': {'admin-user': 'admin', 'admin-password': path.read_text().strip()}}))
-    print('V2 실습 Secret 준비 PASS (값 출력 없음)')
+    for namespace, name, existing, plan in prepared:
+        current = credential_secret(namespace, name)
+        if existing:
+            if not current or current['metadata']['uid'] != existing['metadata']['uid'] or current.get('data') != existing.get('data'):
+                raise RuntimeError('사전 검증 후 기존 인증 Secret 변경 감지')
+            continue
+        if current:
+            raise RuntimeError('검증 후 새 인증 Secret 경합 감지')
+        k('create', '-f', '-', stdin=json.dumps({'apiVersion': 'v1', 'kind': 'Secret',
+            'metadata': {'name': name, 'namespace': namespace, 'labels': {OWNER: VALUE}},
+            'type': 'Opaque', 'stringData': plan.string_data}))
+    print('V2 실습 Secret 준비 PASS (기존 값 보존·출력 없음)')
     login_info()
 
 
 def login_info():
     """사용자가 승인한 로컬 로그인 안내. 값은 화면/Git에 출력하지 않음."""
+    from secret_files import read_private, replace_private
     rows = [('Portal 개발', 'http://127.0.0.1:8000', 'portal-dev-password'),
             ('Portal 검증', 'http://127.0.0.1:8090', 'portal-verify-password'),
             ('YouTube 개발', 'http://127.0.0.1:8002', 'youtube-dev-password'),
@@ -373,11 +385,10 @@ def login_info():
     for name, url, filename in rows:
         path = LOCAL / filename
         if path.exists():
-            content += f'| {name} | {url} | {path.read_text().strip()} |\n'
+            content += f'| {name} | {url} | {read_private(path).decode().strip()} |\n'
     content += '\nPortal 비밀번호는 파일함·관리자·포트폴리오 편집에 사용합니다.\nPrometheus: http://127.0.0.1:8084 (로그인 없음)\nArgo 8085는 로컬 인증서 검증 프록시 실행 시 사용합니다.\n'
     path = LOCAL / 'V2_로그인정보.md'
-    path.write_text(content)
-    path.chmod(0o600)
+    replace_private(path, content.encode())
 
 
 def deploy(args):
@@ -399,6 +410,7 @@ def seed(_):
 
 
 def argocd(_):
+    from secret_files import read_private, create_private
     guard()
     refuse_foreign('namespace', 'argocd')
     k('apply', '-f', 'platforms/argocd/namespace.yaml')
@@ -408,7 +420,7 @@ def argocd(_):
         refuse_foreign('secret', 'v2-repository', 'argocd')
         repo_secret = {'apiVersion': 'v1', 'kind': 'Secret', 'metadata': {'name': 'v2-repository', 'namespace': 'argocd',
                        'labels': {OWNER: VALUE, 'argocd.argoproj.io/secret-type': 'repository'}},
-                       'stringData': {'type': 'git', 'url': REPO, 'sshPrivateKey': repo_key.read_text()}}
+                       'stringData': {'type': 'git', 'url': REPO, 'sshPrivateKey': read_private(repo_key).decode()}}
         k('apply', '-f', '-', stdin=json.dumps(repo_secret))
     dependency = json.loads((ROOT / 'dependencies.json').read_text())
     chart = ROOT / 'platforms/argocd/chart/charts' / dependency['argocd_chart_file']
@@ -434,8 +446,10 @@ def argocd(_):
     raw = k('-n', 'argocd', 'get', 'secret', 'argocd-initial-admin-secret', '--ignore-not-found', '-o', 'json').strip()
     if raw:
         password = LOCAL / 'argocd-password'
-        password.write_bytes(base64.b64decode(json.loads(raw)['data']['password']))
-        password.chmod(0o600)
+        if password.exists() or password.is_symlink():
+            read_private(password)  # 오래된 initial Secret으로 기존 저장 값을 덮어쓰지 않음.
+        else:
+            create_private(password, base64.b64decode(json.loads(raw)['data']['password']))
     print('최소 bootstrap PASS. root → argocd → 각 서비스 순서로 Argo sync 실행')
 
 
@@ -505,6 +519,9 @@ def sync(args):
         preflight_root(args.revision)
     if args.environment in ('loki', 'alloy', 'tempo'):
         preflight_logging(args.environment, args.revision)
+    if args.environment == 'security':
+        from security_guard import preflight
+        preflight(args.revision)
     before = application_guard(args.environment)
     if before.get('operation') or before.get('status', {}).get('operationState', {}).get('phase') == 'Running':
         raise RuntimeError('기존 sync 진행 중')
@@ -687,7 +704,7 @@ def gitops(args):
     from types import SimpleNamespace
     revision = args.revision or run(['git', 'rev-parse', 'HEAD']).strip()
     credentials(args)
-    for name in ('root', 'argocd', 'blackbox', 'loki', 'tempo', 'alloy', 'prometheus', 'grafana', 'dev', 'verify', 'youtube-dev', 'youtube-verify', 'portal-dev', 'portal-verify'):
+    for name in ('root', 'argocd', 'blackbox', 'loki', 'tempo', 'alloy', 'prometheus', 'grafana', 'dev', 'verify', 'youtube-dev', 'youtube-verify', 'portal-dev', 'portal-verify', 'security'):
         sync(SimpleNamespace(environment=name, revision=revision))
 
 

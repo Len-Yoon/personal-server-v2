@@ -5,6 +5,7 @@ resources:
 - service.yaml
 - pvc.yaml
 - networkpolicy.yaml
+- serviceaccount.yaml
 labels:
 - pairs:
     lab.personal-server-v2/owner: personal-server-v2
