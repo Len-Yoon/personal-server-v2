@@ -32,6 +32,11 @@ class SecurityToolTests(unittest.TestCase):
             else: modified.append({'kind':'Secret','metadata':{'name':'v2-diagnostics','namespace':'v2-verify','labels':{lab.OWNER:lab.VALUE}}})
             with self.subTest(change=change), self.assertRaises(RuntimeError): guard.validate(modified)
 
+    def test_live_policy_scope_drift_is_rejected_before_recovery(self):
+        obj={"metadata":{"labels":{lab.OWNER:lab.VALUE}},"spec":{"matchConditions":[],"failurePolicy":"Fail"}}
+        with patch.object(lab,"guard"),patch.object(lab,"k",return_value=json.dumps(obj)):
+            with self.assertRaisesRegex(RuntimeError,"namespace 범위"):guard.owned_cluster(guard.POLICY)
+
     def test_preflight_foreign_source_stops_before_cluster_mutation(self):
         with patch.object(lab,'run',side_effect=['a'*40,'changed']), patch.object(lab,'k') as k:
             with self.assertRaises(RuntimeError):guard.preflight('a'*40)

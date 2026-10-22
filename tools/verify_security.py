@@ -3,6 +3,7 @@
 import argparse
 import base64
 import copy
+from datetime import datetime
 import hashlib
 import json
 import ssl
@@ -104,7 +105,14 @@ def admission_checks():
         for kind in ('Pod', 'Deployment'):
             normal = base if kind == 'Pod' else deployment_spec(base)
             checks[ns + '/' + kind + '/valid'] = dry_run(normal)
-            for case in ('owner', 'service-account', 'token', 'tag', 'registry', 'init-image', 'projected-token'):
+            if kind == 'Deployment':
+                fault = copy.deepcopy(normal)
+                fault['spec']['template']['metadata']['labels']['app.kubernetes.io/name'] = 'book'
+                fault['spec']['selector']['matchLabels']['app.kubernetes.io/name'] = 'book'
+                fault['spec']['template']['spec']['serviceAccountName'] = 'v2-book'
+                fault['spec']['template']['spec']['containers'][0]['image'] = lab.MISSING_IMAGE
+                checks[ns + '/Deployment/image-pull-lab-compatible'] = dry_run(fault)
+            for case in ('owner', 'service-account', 'token', 'tag', 'registry', 'init-image', 'projected-token', 'resource-zero'):
                 obj = copy.deepcopy(normal)
                 spec = obj['spec'] if kind == 'Pod' else obj['spec']['template']['spec']
                 meta = obj['metadata'] if kind == 'Pod' else obj['spec']['template']['metadata']
@@ -117,12 +125,16 @@ def admission_checks():
                     spec['initContainers'] = [copy.deepcopy(spec['containers'][0])]
                     spec['initContainers'][0]['name'] = 'init'
                     spec['initContainers'][0]['image'] = 'localhost:5001/v2-book:latest'
+                elif case == 'resource-zero': spec['containers'][0]['resources']['requests']['cpu'] = '0'
                 else: spec['volumes'] = [{'name': 'bypass', 'projected': {'sources': [{'serviceAccountToken': {'path': 'token'}}]}}]
                 checks[ns + '/' + kind + '/' + case] = dry_run(obj, boundary.NAME)
         for case in ('privileged', 'hostPath', 'hostNetwork', 'root', 'escalation', 'capability', 'seccomp'):
             obj = copy.deepcopy(base)
             spec = obj['spec']; container = spec['containers'][0]
-            if case == 'privileged': container['securityContext']['privileged'] = True
+            if case == 'privileged':
+                container['securityContext']['privileged'] = True
+                # privileged=true와 escalation=false 조합은 API 구조 검증에서 먼저 거부됨.
+                container['securityContext']['allowPrivilegeEscalation'] = True
             elif case == 'hostPath': spec['volumes'] = [{'name': 'host', 'hostPath': {'path': '/'}}]
             elif case == 'hostNetwork': spec['hostNetwork'] = True
             elif case == 'root': spec['securityContext']['runAsUser'] = 0
@@ -141,9 +153,13 @@ def admission_checks():
 def api_client(namespace, service_account):
     lab.namespace_guard(namespace)
     sa = owned_object(namespace, 'serviceaccount', service_account)
-    token = json.loads(lab.k('create', '--raw', '/api/v1/namespaces/' + namespace + '/serviceaccounts/' + service_account + '/token',
+    issued = json.loads(lab.k('create', '--raw', '/api/v1/namespaces/' + namespace + '/serviceaccounts/' + service_account + '/token',
         '-f', '-', stdin=json.dumps({'apiVersion': 'authentication.k8s.io/v1', 'kind': 'TokenRequest',
-                                    'spec': {'expirationSeconds': 600}})))['status']['token']
+                                    'spec': {'expirationSeconds': 600}})))['status']
+    token = issued['token']
+    remaining = datetime.fromisoformat(issued['expirationTimestamp'].replace('Z', '+00:00')).timestamp() - time.time()
+    if not 0 < remaining <= 660:
+        raise RuntimeError('진단 토큰의 실제 유효기간이 허용 범위를 벗어남')
     # CA와 loopback API 주소는 guard가 검증한 kubeconfig만 사용함. 토큰은 argv/env/파일에 저장하지 않음.
     ca = lab.k('config', 'view', '--raw', '-o=jsonpath={.clusters[0].cluster.certificate-authority-data}')
     context = ssl.create_default_context(cadata=base64.b64decode(ca).decode())
@@ -162,6 +178,7 @@ def api_client(namespace, service_account):
         if status != expected:
             raise RuntimeError('제한된 계정 API 응답이 예상 권한과 다름')
         return status
+    request.expiry_seconds = int(remaining)
     return request
 
 
@@ -178,6 +195,7 @@ def rbac_checks():
             ('other-environment', '/api/v1/namespaces/' + other + '/pods?limit=1', 403),
             ('exec', '/api/v1/namespaces/' + ns + '/pods/' + pod['metadata']['name'] + '/exec?command=true&stdout=true', 403)]
         result = {name: diag('GET', path, status) for name, path, status in paths}
+        result['token_expiry_seconds_max'] = diag.expiry_seconds
         result['pod-create'] = diag('POST', '/api/v1/namespaces/' + ns + '/pods?dryRun=All', 403, pod_spec('v2-security-rbac', ns))
         result['role-write'] = diag('POST', '/apis/rbac.authorization.k8s.io/v1/namespaces/' + ns + '/roles?dryRun=All', 403,
             {'apiVersion': 'rbac.authorization.k8s.io/v1', 'kind': 'Role', 'metadata': {'name': 'v2-security-denied'}, 'rules': []})
@@ -304,7 +322,7 @@ def canary_secret():
             lab.k('-n', ns, 'wait', '--for=delete', 'pod/' + pod_name, '--timeout=120s')
             items.pop();save_journal(items, state['cluster_uid'])
         return {'canary_secret_uid_preserved': True, 'readbacks': 2, 'pod_recreated': True,
-                'update_bypass_rejected': True, 'values_logged': False}
+                'update_bypass_rejected': True, 'ephemeral_bypass_rejected': True, 'values_logged': False}
     finally:
         cleanup()
 

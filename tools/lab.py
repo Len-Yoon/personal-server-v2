@@ -25,6 +25,7 @@ OWNER = 'lab.personal-server-v2/owner'
 VALUE = 'personal-server-v2'
 REPO = 'ssh://git@github.com/Len-Yoon/personal-server-v2.git'
 SOURCE = '23572de06038341fc2ed11714cccde04e9967080'
+MISSING_IMAGE = 'localhost:5001/v2-book@sha256:' + '0' * 64
 REGISTRY = 'registry:2.8.3'  # dependencies.json의 digest로 실행
 ENVIRONMENTS = {'dev': 'v2-dev', 'verify': 'v2-verify'}
 APPLICATIONS = {
@@ -635,7 +636,8 @@ def exercise(args):
     else:
         container = {'name': 'book'}
         if args.fault == 'image':
-            container['image'] = 'localhost:5001/v2-book:missing-v2-lab'
+            # digest 정책 통과 후 실제 registry NotFound를 관찰하는 기존 장애 실습을 유지함.
+            container['image'] = MISSING_IMAGE
         elif args.fault == 'pending':
             k('-n', namespace, 'patch', 'deployment', 'book', '--type=strategic', '-p', json.dumps({'spec': {'template': {'spec': {'nodeSelector': {'lab.personal-server-v2/unavailable': 'true'}}}}}))
             print('장애 주입: Pending nodeSelector / 복구: python3 tools/lab.py restore')

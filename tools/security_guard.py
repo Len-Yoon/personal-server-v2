@@ -54,6 +54,8 @@ def owned_cluster(kind):
     obj = json.loads(lab.k('get', kind, NAME, '-o', 'json'))
     if obj['metadata'].get('labels', {}).get(lab.OWNER) != lab.VALUE:
         raise RuntimeError('보안 cluster 자원 소유 불일치')
+    if kind == POLICY and (obj['spec'].get('matchConditions') != SCOPE or obj['spec'].get('failurePolicy') != 'Fail'):
+        raise RuntimeError('실제 보안 정책의 namespace 범위 불일치')
     if kind == BINDING and obj['spec'].get('policyName') != NAME:
         raise RuntimeError('보안 Binding 정책 이름 불일치')
     return obj
