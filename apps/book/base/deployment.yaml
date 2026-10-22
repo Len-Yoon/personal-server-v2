@@ -6,7 +6,6 @@ spec:
   replicas: 1
   revisionHistoryLimit: 2
   progressDeadlineSeconds: 180
-  # SQLite와 RWO PVC를 한 Pod가 사용함. 무중단/다중 writer 구성이 아님.
   strategy:
     type: Recreate
   selector:
@@ -29,71 +28,82 @@ spec:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
-              - matchExpressions:
-                  - key: kubernetes.io/hostname
-                    operator: In
-                    values:
-                      - k3d-ps-v2-agent-0
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - k3d-ps-v2-agent-0
       containers:
-        - name: book
-          image: v2-book:23572de06038341fc2ed11714cccde04e9967080
-          imagePullPolicy: IfNotPresent
-          ports:
-            - name: http
-              containerPort: 8003
-          env:
-            - name: BOOK_MEMO_DB_PATH
-              value: /data/book_memo.sqlite3
-            - name: DELETE_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: book-auth
-                  key: password
-            - name: APP_ENV
-              value: development
-            - name: PORTAL_HOME_URL
-              value: http://localhost:8080
-            - name: PYTHONDONTWRITEBYTECODE
-              value: "1"
-          resources:
-            requests:
-              cpu: 100m
-              memory: 128Mi
-            limits:
-              cpu: 500m
-              memory: 384Mi
-          securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: [ALL]
-          startupProbe:
-            httpGet:
-              path: /health
-              port: http
-            periodSeconds: 2
-            failureThreshold: 30
-          readinessProbe:
-            httpGet:
-              path: /ready
-              port: http
-            periodSeconds: 5
-            timeoutSeconds: 2
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: http
-            periodSeconds: 10
-            timeoutSeconds: 2
-          volumeMounts:
-            - name: data
-              mountPath: /data
-            - name: tmp
-              mountPath: /tmp
-      volumes:
+      - name: book
+        image: v2-book:23572de06038341fc2ed11714cccde04e9967080
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8003
+        env:
+        - name: BOOK_MEMO_DB_PATH
+          value: /data/book_memo.sqlite3
+        - name: DELETE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: book-auth
+              key: password
+        - name: APP_ENV
+          value: development
+        - name: PORTAL_HOME_URL
+          value: http://localhost:8080
+        - name: PYTHONDONTWRITEBYTECODE
+          value: '1'
+        - name: OTEL_SERVICE_NAME
+          value: book
+        - name: OTEL_TRACES_EXPORTER
+          value: none
+        - name: OTEL_METRICS_EXPORTER
+          value: none
+        - name: OTEL_LOGS_EXPORTER
+          value: none
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://alloy.v2-observability.svc.cluster.local:4318
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 384Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 2
+          failureThreshold: 30
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          periodSeconds: 5
+          timeoutSeconds: 2
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 2
+        volumeMounts:
         - name: data
-          persistentVolumeClaim:
-            claimName: book-data
+          mountPath: /data
         - name: tmp
-          emptyDir:
-            sizeLimit: 64Mi
+          mountPath: /tmp
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: book-data
+      - name: tmp
+        emptyDir:
+          sizeLimit: 64Mi

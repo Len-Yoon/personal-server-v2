@@ -1,0 +1,129 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tempo-data
+  namespace: v2-observability
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tempo
+  namespace: v2-observability
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: tempo
+  ports:
+  - name: http
+    port: 3200
+    targetPort: http
+  - name: otlp-grpc
+    port: 4317
+    targetPort: otlp-grpc
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: tempo
+  namespace: v2-observability
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+spec:
+  replicas: 1
+  serviceName: tempo
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tempo
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tempo
+        lab.personal-server-v2/owner: personal-server-v2
+    spec:
+      automountServiceAccountToken: false
+      nodeSelector:
+        kubernetes.io/hostname: k3d-ps-v2-agent-0
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: tempo
+        image: grafana/tempo:3.1.1@sha256:64e2fbd56d9c2b3412a4b430a58ea59e91a670b1e75f920a0c702213ad145044
+        args:
+        - -config.file=/etc/tempo/config.yaml
+        env:
+        - name: GOMEMLIMIT
+          value: 384MiB
+        ports:
+        - name: http
+          containerPort: 3200
+        - name: otlp-grpc
+          containerPort: 4317
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        startupProbe:
+          httpGet:
+            path: /ready
+            port: http
+          periodSeconds: 2
+          failureThreshold: 90
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          periodSeconds: 5
+          timeoutSeconds: 2
+        livenessProbe:
+          httpGet:
+            path: /metrics
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 2
+        volumeMounts:
+        - name: config
+          mountPath: /etc/tempo
+          readOnly: true
+        - name: storage
+          mountPath: /var/tempo
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: config
+        configMap:
+          name: tempo-config
+      - name: storage
+        persistentVolumeClaim:
+          claimName: tempo-data
+      - name: tmp
+        emptyDir:
+          sizeLimit: 64Mi

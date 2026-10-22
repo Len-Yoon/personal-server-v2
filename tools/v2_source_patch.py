@@ -4,6 +4,33 @@ from pathlib import Path
 import re
 
 
+def apply_telemetry(context: Path):
+    """고정 소스의 build context에만 명시 bootstrap/내부 전송 계층을 연결함."""
+    main = context / 'app/main.py'
+    content = main.read_text()
+    if content.count('app = FastAPI(') != 1 or 'v2_telemetry' in content:
+        raise RuntimeError('V2 telemetry main patch contract mismatch')
+    # FastAPI 0.142는 lifespan에서 env endpoint를 보고 별도 native exporter를 만듦.
+    # 자체 PrivateExporter 외의 trace/metric/log 전송 경로를 생성자에서 차단함.
+    content = content.replace('app = FastAPI(',
+        'app = FastAPI(telemetry={"auto_configure": False, "tracing": False, '
+        '"metrics": False, "logs": False, "operation_spans": False}, ', 1)
+    content += '\n# V2 전용 명시 HTTP 계측 (모든 라우트 등록 이후 초기화)\nfrom app.v2_telemetry import configure as configure_v2_telemetry\nconfigure_v2_telemetry(app)\n'
+    changed = ['app/main.py']
+    search = context / 'app/services/global_search.py'
+    if search.exists():
+        original = search.read_text()
+        anchor = 'httpx.AsyncClient(timeout=SEARCH_BUDGET_SECONDS, follow_redirects=True)'
+        if original.count(anchor) != 1:
+            raise RuntimeError('V2 telemetry HTTPX patch contract mismatch')
+        patched = original.replace('import httpx\n', 'import httpx\nfrom app.v2_telemetry import internal_transport\n', 1)
+        patched = patched.replace(anchor, 'httpx.AsyncClient(timeout=SEARCH_BUDGET_SECONDS, follow_redirects=True, transport=internal_transport())')
+        search.write_text(patched)
+        changed.append(str(search.relative_to(context)))
+    main.write_text(content)
+    return changed
+
+
 def apply(context: Path):
     path = context / 'app/services/host_urls.py'
     original = path.read_text()

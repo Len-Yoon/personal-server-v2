@@ -22,6 +22,9 @@ spec:
   - name: http
     port: 12345
     targetPort: http
+  - name: otlp-http
+    port: 4318
+    targetPort: otlp-http
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -67,6 +70,8 @@ spec:
         ports:
         - name: http
           containerPort: 12345
+        - name: otlp-http
+          containerPort: 4318
         resources:
           requests:
             cpu: 50m
@@ -106,6 +111,9 @@ spec:
           mountPath: /var/lib/alloy/data
         - name: tmp
           mountPath: /tmp
+        env:
+        - name: GOMEMLIMIT
+          value: 192MiB
       volumes:
       - name: config
         configMap:

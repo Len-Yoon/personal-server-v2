@@ -88,6 +88,34 @@ grafana:
         editable: false
         jsonData:
           maxLines: 300
+          derivedFields:
+          - name: TraceID
+            matcherRegex: trace_id=([0-9a-f]{32})
+            datasourceUid: v2-tempo
+            url: $${__value.raw}
+            urlDisplayLabel: Tempo에서 trace 조회
+      - name: Tempo
+        uid: v2-tempo
+        type: tempo
+        access: proxy
+        url: http://tempo.v2-observability.svc.cluster.local:3200
+        isDefault: false
+        editable: false
+        jsonData:
+          httpMethod: GET
+          tracesToLogsV2:
+            datasourceUid: v2-loki
+            spanStartTimeShift: -1m
+            spanEndTimeShift: 1m
+            tags:
+            - key: service.name
+              value: service
+            - key: deployment.environment.name
+              value: environment
+            filterByTraceID: true
+            filterBySpanID: false
+          streamingEnabled:
+            search: true
   dashboardProviders:
     dashboardproviders.yaml:
       apiVersion: 1

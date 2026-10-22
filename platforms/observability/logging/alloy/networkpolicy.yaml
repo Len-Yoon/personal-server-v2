@@ -20,6 +20,27 @@ spec:
     ports:
     - protocol: TCP
       port: 12345
+  - from:
+    - namespaceSelector:
+        matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+          - v2-dev
+          - v2-verify
+      podSelector:
+        matchExpressions:
+        - key: app.kubernetes.io/name
+          operator: In
+          values:
+          - book
+          - portal
+          - youtube
+        matchLabels:
+          lab.personal-server-v2/owner: personal-server-v2
+    ports:
+    - protocol: TCP
+      port: 4318
   egress:
   - to:
     - namespaceSelector:
@@ -45,3 +66,11 @@ spec:
       port: 443
     - protocol: TCP
       port: 6443
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: tempo
+          lab.personal-server-v2/owner: personal-server-v2
+    ports:
+    - protocol: TCP
+      port: 4317

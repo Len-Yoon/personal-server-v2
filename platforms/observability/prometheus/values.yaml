@@ -259,6 +259,10 @@ prometheus:
       static_configs:
       - targets:
         - alloy.v2-observability.svc.cluster.local:12345
+    - job_name: tempo
+      static_configs:
+      - targets:
+        - tempo.v2-observability.svc.cluster.local:3200
   extraManifests:
   - |
     apiVersion: rbac.authorization.k8s.io/v1
@@ -345,3 +349,14 @@ prometheus:
           annotations:
             summary: V2 로그 수집 구성요소에 접근할 수 없음
             description: 프로세스 scrape 가용성 경보이며 로그의 완전 수집·외부 알림 수신을 보장하지 않음.
+      - name: v2-trace-collection
+        rules:
+        - alert: V2TracePipelineUnavailable
+          expr: up{job=~"tempo|alloy"} == 0
+          for: 1m
+          labels:
+            severity: warning
+            scope: v2-lab
+          annotations:
+            summary: V2 trace 수집 구성요소에 접근할 수 없음
+            description: scrape 프로세스 가용성 상태이며 trace의 완전 전달·무손실 보존·외부 알림 수신을 보장하지 않음.

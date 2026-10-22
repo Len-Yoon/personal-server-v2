@@ -35,3 +35,14 @@ spec:
     ports:
     - protocol: TCP
       port: 8002
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: v2-observability
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: alloy
+          lab.personal-server-v2/owner: personal-server-v2
+    ports:
+    - protocol: TCP
+      port: 4318
