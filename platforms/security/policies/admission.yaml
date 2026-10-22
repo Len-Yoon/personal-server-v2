@@ -1,0 +1,100 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: v2-app-workloads
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    matchPolicy: Equivalent
+    resourceRules:
+    - apiGroups:
+      - ''
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - pods
+      - pods/ephemeralcontainers
+    - apiGroups:
+      - apps
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - deployments
+  matchConditions:
+  - name: v2-app-namespaces
+    expression: request.namespace in ['v2-dev', 'v2-verify']
+  variables:
+  - name: isDeployment
+    expression: request.resource.group == 'apps' && request.resource.resource == 'deployments'
+  - name: podSpec
+    expression: 'variables.isDeployment ? object.spec.template.spec : object.spec'
+  - name: podMetadata
+    expression: 'variables.isDeployment ? object.spec.template.metadata : object.metadata'
+  - name: appName
+    expression: >-
+      has(variables.podMetadata.labels) && 'app.kubernetes.io/name' in variables.podMetadata.labels ? variables.podMetadata.labels['app.kubernetes.io/name']
+      : ''
+  - name: expectedSA
+    expression: 'variables.appName == ''v2-security-probe'' ? ''v2-diagnostics'' : ''v2-'' + variables.appName'
+  - name: imageName
+    expression: 'variables.appName == ''v2-security-probe'' ? ''book'' : variables.appName'
+  - name: containers
+    expression: 'variables.podSpec.containers + (has(variables.podSpec.initContainers) ? variables.podSpec.initContainers
+      : [])'
+  - name: resourceFieldsPresent
+    expression: >-
+      variables.containers.all(c, has(c.resources) && has(c.resources.requests) && has(c.resources.limits) && 'cpu'
+      in c.resources.requests && 'memory' in c.resources.requests && 'cpu' in c.resources.limits && 'memory' in
+      c.resources.limits)
+  validations:
+  - expression: >-
+      has(object.metadata.labels) && 'lab.personal-server-v2/owner' in object.metadata.labels && object.metadata.labels['lab.personal-server-v2/owner']
+      == 'personal-server-v2'
+    message: V2 소유 표식이 필요함
+  - expression: >-
+      has(variables.podMetadata.labels) && 'lab.personal-server-v2/owner' in variables.podMetadata.labels && variables.podMetadata.labels['lab.personal-server-v2/owner']
+      == 'personal-server-v2'
+    message: Pod 템플릿에도 V2 소유 표식이 필요함
+  - expression: variables.appName in ['book', 'portal', 'youtube', 'v2-security-probe']
+    message: 승인된 앱 또는 서비스 selector와 분리된 진단 Pod만 허용함
+  - expression: has(variables.podSpec.serviceAccountName) && variables.podSpec.serviceAccountName == variables.expectedSA
+    message: 앱별 전용 ServiceAccount 또는 v2-diagnostics가 필요함
+  - expression: has(variables.podSpec.automountServiceAccountToken) && variables.podSpec.automountServiceAccountToken
+      == false
+    message: 서비스 계정 토큰 자동 마운트를 명시적으로 차단해야 함
+  - expression: >-
+      !has(variables.podSpec.volumes) || variables.podSpec.volumes.all(v, !has(v.projected) || !v.projected.sources.exists(s,
+      has(s.serviceAccountToken)))
+    message: 서비스 계정 토큰의 직접 projected volume 투영도 허용하지 않음
+  - expression: '!has(variables.podSpec.ephemeralContainers) || size(variables.podSpec.ephemeralContainers) == 0'
+    message: 임시 디버그 컨테이너는 현재 앱 실습 범위에서 허용하지 않음
+  - expression: variables.containers.all(c, c.image.matches('^localhost:5001/v2-' + variables.imageName + '@sha256:[a-f0-9]{64}$'))
+    message: 모든 앱·init 컨테이너는 해당 V2 앱 registry 이미지의 sha256 digest로 고정해야 함
+  - expression: variables.resourceFieldsPresent
+    message: 모든 앱·init 컨테이너의 최종 객체에 CPU·메모리 requests/limits가 필요함
+  - expression: >-
+      !variables.resourceFieldsPresent || variables.containers.all(c, quantity(string(c.resources.requests.cpu)).compareTo(quantity('0'))
+      > 0 && quantity(string(c.resources.requests.memory)).compareTo(quantity('0')) > 0 && quantity(string(c.resources.requests.cpu)).compareTo(quantity(string(c.resources.limits.cpu)))
+      <= 0 && quantity(string(c.resources.requests.memory)).compareTo(quantity(string(c.resources.limits.memory)))
+      <= 0 && quantity(string(c.resources.limits.cpu)).compareTo(quantity('1')) <= 0 && quantity(string(c.resources.limits.memory)).compareTo(quantity('1Gi'))
+      <= 0)
+    message: 컨테이너 requests는 양수·limits 이하여야 하며 limits 상한은 CPU1·메모리1Gi임
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: v2-app-workloads
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+spec:
+  policyName: v2-app-workloads
+  validationActions:
+  - Deny

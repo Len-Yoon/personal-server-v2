@@ -107,3 +107,4 @@ spec:
       - name: tmp
         emptyDir:
           sizeLimit: 64Mi
+      serviceAccountName: v2-book

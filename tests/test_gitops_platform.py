@@ -62,7 +62,7 @@ class PlatformTests(unittest.TestCase):
                 self.assertNotIn('automated', obj['spec'].get('syncPolicy', {}))
                 self.assertNotIn('finalizers', obj['metadata'])
         self.assertEqual(namespaces, {'argocd', 'v2-dev', 'v2-verify', 'v2-observability'})
-        self.assertEqual(apps, {'argocd-self', 'book-dev', 'book-verify', 'prometheus', 'grafana', 'blackbox', 'portal-dev', 'portal-verify', 'youtube-dev', 'youtube-verify', 'loki', 'alloy', 'tempo'})
+        self.assertEqual(apps, {'argocd-self', 'book-dev', 'book-verify', 'prometheus', 'grafana', 'blackbox', 'portal-dev', 'portal-verify', 'youtube-dev', 'youtube-verify', 'loki', 'alloy', 'tempo', 'security'})
 
 
 if __name__ == '__main__':

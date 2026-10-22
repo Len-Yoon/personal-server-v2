@@ -1,0 +1,143 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: v2-diagnostics
+  namespace: v2-dev
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: v2-diagnostics
+  namespace: v2-dev
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  - events
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - events.k8s.io
+  resources:
+  - events
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ''
+  resources:
+  - pods/log
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: v2-diagnostics
+  namespace: v2-dev
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+subjects:
+- kind: ServiceAccount
+  name: v2-diagnostics
+  namespace: v2-dev
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: v2-diagnostics
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: v2-default-deny
+  namespace: v2-dev
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress: []
+  egress: []
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: v2-diagnostics
+  namespace: v2-verify
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: v2-diagnostics
+  namespace: v2-verify
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  - events
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - events.k8s.io
+  resources:
+  - events
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ''
+  resources:
+  - pods/log
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: v2-diagnostics
+  namespace: v2-verify
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+subjects:
+- kind: ServiceAccount
+  name: v2-diagnostics
+  namespace: v2-verify
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: v2-diagnostics
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: v2-default-deny
+  namespace: v2-verify
+  labels:
+    lab.personal-server-v2/owner: personal-server-v2
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress: []
+  egress: []
