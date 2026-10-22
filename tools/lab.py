@@ -49,15 +49,18 @@ APPLICATIONS = {
 }
 
 
-def run(args, *, stdin=None, capture=True, check=True):
+def run(args, *, stdin=None, capture=True, check=True, timeout=None):
     env = os.environ.copy()
     for key in list(env):
         if key.startswith('HELM_KUBE') or key in ('KUBECONFIG', 'DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH'):
             env.pop(key, None)
     env['DOCKER_CONTEXT'] = 'orbstack'
     env['PATH'] = str(ROOT / '.tools/bin') + os.pathsep + env.get('PATH', '')
-    result = subprocess.run([str(x) for x in args], input=stdin, text=True,
-                            capture_output=capture, env=env, cwd=ROOT)
+    try:
+        result = subprocess.run([str(x) for x in args], input=stdin, text=True,
+                                capture_output=capture, env=env, cwd=ROOT, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f'{args[0]} 응답 시간 초과 (상세 비출력)') from None
     if check and result.returncode:
         # Secret이 stdin/stdout에 있을 수 있어 command 출력과 stdout은 예외에 넣지 않음.
         detail = result.stderr if capture else '화면 출력 참조'
@@ -68,7 +71,7 @@ def run(args, *, stdin=None, capture=True, check=True):
 
 
 def docker(*args, **kwargs):
-    endpoint = run(['docker', 'context', 'inspect', 'orbstack', '--format', '{{.Endpoints.docker.Host}}']).strip()
+    endpoint = run(['docker', 'context', 'inspect', 'orbstack', '--format', '{{.Endpoints.docker.Host}}'], timeout=10).strip()
     expected = f'unix://{Path.home()}/.orbstack/run/docker.sock'
     if endpoint != expected:
         raise RuntimeError('OrbStack 로컬 소켓 불일치. 실행 거부')
@@ -160,7 +163,7 @@ def kube_config_valid(config):
 
 
 def container_owned(name):
-    obj = json.loads(docker('inspect', name))[0]
+    obj = json.loads(docker('inspect', name, timeout=10))[0]
     if obj['Config'].get('Labels', {}).get(OWNER) != VALUE:
         raise RuntimeError(f'{name}: V2 소유 표식 없음')
     return obj

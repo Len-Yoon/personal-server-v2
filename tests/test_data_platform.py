@@ -47,3 +47,8 @@ class DataTests(unittest.TestCase):
   with patch.object(lab,'k') as k:
    with self.assertRaises(RuntimeError):data_lab.owned('v2-dev','pvc','book-data')
    k.assert_not_called()
+
+ def test_engine_timeout_is_sanitized(self):
+  with patch.object(lab.subprocess,'run',side_effect=lab.subprocess.TimeoutExpired(['docker'],10,output='secret-content')):
+   with self.assertRaisesRegex(RuntimeError,'응답 시간 초과') as error:lab.run(['docker'],timeout=10)
+   self.assertNotIn('secret-content',str(error.exception))
