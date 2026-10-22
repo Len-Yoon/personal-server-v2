@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 MAX_BODY = 65536
+APP_VERSION = '1.1.0'
 
 
 def private_setting(name):
@@ -112,6 +113,11 @@ def create_app(connector=connect_database):
     @api.get('/health')
     def health():
         return {'status': 'ok'}
+
+    @api.get('/version')
+    def version():
+        """인증값·환경 정보를 노출하지 않고 배포된 앱 버전을 확인함."""
+        return {'service': 'v2-notes-api', 'version': APP_VERSION}
 
     @api.get('/ready')
     def ready():

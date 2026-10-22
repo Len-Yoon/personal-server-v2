@@ -110,6 +110,15 @@ class NotesAPITest(unittest.TestCase):
         with patch.dict(os.environ,{'NOTES_API_TOKEN_FILE':'/missing-v2-test-secret'}):
             self.assertEqual(self.client.get('/notes',headers=self.headers).status_code,503)
 
+    def test_public_version_survives_database_and_auth_unavailability(self):
+        self.db.unavailable = True
+        with patch.dict(os.environ, {'NOTES_API_TOKEN_FILE':'/missing-v2-test-secret'}):
+            response = self.client.get('/version')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {'service':'v2-notes-api', 'version':'1.1.0'})
+        self.assertEqual(self.db.queries, [])
+        self.assertEqual(self.client.get('/notes').status_code, 401)
+
     def test_database_failure_is_sanitized_and_liveness_survives(self):
         self.db.unavailable = True
         self.assertEqual(self.client.get('/health').status_code,200)
