@@ -467,8 +467,9 @@ spec:
         command:
         - python3
         - -c
-        - import os,time; os.makedirs('/backups/archives',mode=0o700,exist_ok=True);
-          time.sleep(2147483647)
+        - import os,time,stat; p='/backups/archives'; os.makedirs(p,mode=0o700,exist_ok=True);
+          s=os.lstat(p); assert stat.S_ISDIR(s.st_mode) and s.st_uid==os.getuid()
+          and stat.S_IMODE(s.st_mode) in (0o700,0o2700); os.chmod(p,0o700); time.sleep(2147483647)
         volumeMounts:
         - name: backups
           mountPath: /backups

@@ -60,6 +60,7 @@ def credentials():
         if current:raise RuntimeError('Secret 생성 경합')
         data=plan if isinstance(plan,dict) else plan.string_data
         lab.k('create','-f','-',stdin=json.dumps({'apiVersion':'v1','kind':'Secret','metadata':{'name':name,'namespace':ns,'labels':{OWNER:lab.VALUE}},'type':'Opaque','stringData':data}))
+    lab.login_info()
     print('데이터 실습 자격 증명 준비 PASS (값 비출력)')
 
 def pod(ns,name):
