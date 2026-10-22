@@ -39,6 +39,7 @@ APPLICATIONS = {
     'grafana': ('grafana', 'observability', 'platforms/observability/grafana/chart', 'v2-observability', ['deployment/grafana']),
     'loki': ('loki', 'logging', 'platforms/observability/logging/loki', 'v2-observability', ['statefulset/loki']),
     'alloy': ('alloy', 'logging', 'platforms/observability/logging/alloy', 'v2-observability', ['deployment/alloy']),
+    'tempo': ('tempo', 'logging', 'platforms/observability/tracing/tempo', 'v2-observability', ['statefulset/tempo']),
     'blackbox': ('blackbox', 'observability', 'platforms/observability/blackbox', 'v2-observability', ['deployment/blackbox']),
 }
 
@@ -273,8 +274,22 @@ def build(args):
             dest = context / relative
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(tar.extractfile(member).read())
-    from v2_source_patch import apply as apply_source_patch
+    from v2_source_patch import apply as apply_source_patch, apply_telemetry
     patch_record = apply_source_patch(context)
+    telemetry_dir = ROOT / 'tools/telemetry'
+    telemetry_files = sorted(p for p in telemetry_dir.iterdir() if p.is_file() and p.suffix in ('.py', '.txt'))
+    telemetry_hash = hashlib.sha256()
+    for path in telemetry_files:
+        telemetry_hash.update(path.name.encode() + b'\0' + path.read_bytes())
+    (context / 'app/v2_telemetry.py').write_bytes((telemetry_dir / 'v2_telemetry.py').read_bytes())
+    (context / 'v2-telemetry-requirements.txt').write_bytes((telemetry_dir / 'requirements.txt').read_bytes())
+    dockerfile = context / 'Dockerfile'
+    dockerfile.write_text(dockerfile.read_text() + '\nUSER root\nCOPY v2-telemetry-requirements.txt /tmp/v2-telemetry-requirements.txt\nRUN pip install --no-cache-dir -r /tmp/v2-telemetry-requirements.txt && rm /tmp/v2-telemetry-requirements.txt\nUSER 10001:10001\n')
+    telemetry_changed = apply_telemetry(context)
+    patch_record['telemetry_sha256'] = telemetry_hash.hexdigest()
+    patch_record['files'].extend(['app/v2_telemetry.py', 'v2-telemetry-requirements.txt', 'Dockerfile'])
+    patch_record['files'] = sorted(set(patch_record['files'] + telemetry_changed))
+    patch_record['patch_sha256'] = hashlib.sha256((patch_record['patch_sha256'] + telemetry_hash.hexdigest()).encode()).hexdigest()
     tag = f'localhost:5001/v2-{app}:{SOURCE}-v2-{patch_record["patch_sha256"][:12]}'
     docker('build', '--platform', 'linux/arm64', '--label', f'org.opencontainers.image.revision={SOURCE}', '-t', tag, str(context), capture=False)
     docker('push', tag, capture=False)
@@ -466,8 +481,8 @@ def preflight_logging(environment, revision):
         raise RuntimeError('로그 sync는 해당 SHA의 커밋된 명세로 실행해야 함')
     rendered = k('kustomize', path)
     objects = decode_objects(k('create', '--dry-run=client', '--validate=false', '-f', '-', '-o', 'json', stdin=rendered))
-    allowed = ({'StatefulSet': {'loki'}, 'Service': {'loki'}, 'PersistentVolumeClaim': {'loki-data'},
-                'NetworkPolicy': {'loki-isolation'}} if environment == 'loki' else
+    allowed = ({'StatefulSet': {environment}, 'Service': {environment}, 'PersistentVolumeClaim': {environment + '-data'},
+                'NetworkPolicy': {environment + '-isolation'}} if environment in ('loki', 'tempo') else
                {'Deployment': {'alloy'}, 'Service': {'alloy'}, 'ServiceAccount': {'v2-alloy'},
                 'NetworkPolicy': {'alloy-isolation'}, 'Role': {'v2-alloy-logs'}, 'RoleBinding': {'v2-alloy-logs'}})
     for obj in objects:
@@ -488,7 +503,7 @@ def sync(args):
     guard()
     if args.environment == 'root':
         preflight_root(args.revision)
-    if args.environment in ('loki', 'alloy'):
+    if args.environment in ('loki', 'alloy', 'tempo'):
         preflight_logging(args.environment, args.revision)
     before = application_guard(args.environment)
     if before.get('operation') or before.get('status', {}).get('operationState', {}).get('phase') == 'Running':
@@ -672,7 +687,7 @@ def gitops(args):
     from types import SimpleNamespace
     revision = args.revision or run(['git', 'rev-parse', 'HEAD']).strip()
     credentials(args)
-    for name in ('root', 'argocd', 'blackbox', 'loki', 'alloy', 'prometheus', 'grafana', 'dev', 'verify', 'youtube-dev', 'youtube-verify', 'portal-dev', 'portal-verify'):
+    for name in ('root', 'argocd', 'blackbox', 'loki', 'tempo', 'alloy', 'prometheus', 'grafana', 'dev', 'verify', 'youtube-dev', 'youtube-verify', 'portal-dev', 'portal-verify'):
         sync(SimpleNamespace(environment=name, revision=revision))
 
 

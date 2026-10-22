@@ -29,6 +29,7 @@ class LoggingManifestTests(unittest.TestCase):
         def mib(value):
             return int(value[:-2]) * (1024 if value.endswith('Gi') else 1)
         objects = render('alloy') + render('loki')
+        objects += [obj for obj in yaml.safe_load_all(subprocess.check_output(['kubectl', 'kustomize', str(ROOT / 'platforms/observability/tracing/tempo')], text=True)) if obj]
         for name in ('prometheus', 'grafana'):
             base = ROOT / 'platforms/observability' / name
             rendered = subprocess.check_output(['helm', 'template', name, str(base / 'chart'), '-n', 'v2-observability', '-f', str(base / 'values.yaml')], text=True)

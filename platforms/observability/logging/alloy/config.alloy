@@ -115,3 +115,109 @@ loki.write "v2" {
     batch_wait = "1s"
   }
 }
+
+// trace 수신은 로그 tail 파이프라인과 별도이며 K8s RBAC 권한을 추가하지 않음.
+otelcol.receiver.otlp "v2_traces" {
+  http {
+    endpoint              = "0.0.0.0:4318"
+    include_metadata      = false
+    max_request_body_size = "512KiB"
+    read_header_timeout   = "3s"
+    read_timeout          = "5s"
+    write_timeout         = "5s"
+  }
+
+  output {
+    traces = [otelcol.processor.memory_limiter.v2_traces.input]
+  }
+}
+
+otelcol.processor.memory_limiter "v2_traces" {
+  check_interval = "1s"
+  limit          = "160MiB"
+  spike_limit    = "32MiB"
+
+  output {
+    traces = [otelcol.processor.filter.v2_traces.input]
+  }
+}
+
+otelcol.processor.filter "v2_traces" {
+  error_mode = "propagate"
+
+  trace_conditions {
+    context = "resource"
+    conditions = [
+      `not (attributes["service.name"] == "portal" or attributes["service.name"] == "book" or attributes["service.name"] == "youtube")`,
+      `not (attributes["deployment.environment.name"] == "dev" or attributes["deployment.environment.name"] == "verify")`,
+    ]
+  }
+
+  trace_conditions {
+    context    = "spanevent"
+    conditions = ["true"]
+  }
+
+  output {
+    traces = [otelcol.processor.transform.v2_traces.input]
+  }
+}
+
+// 앱 exporter의 allowlist에 더해 collector에서도 HTTP 최소 속성만 전달함.
+otelcol.processor.transform "v2_traces" {
+  error_mode = "propagate"
+
+  trace_statements {
+    context = "resource"
+    statements = [
+      `keep_keys(attributes, ["service.name", "deployment.environment.name"])`,
+    ]
+  }
+
+  trace_statements {
+    context = "span"
+    statements = [
+      `keep_keys(attributes, ["http.request.method", "http.route", "http.response.status_code"])`,
+      `set(status.message, "")`,
+      `truncate_all(attributes, 128)`,
+    ]
+  }
+
+  output {
+    traces = [otelcol.processor.batch.v2_traces.input]
+  }
+}
+
+otelcol.processor.batch "v2_traces" {
+  timeout             = "1s"
+  send_batch_size     = 32
+  send_batch_max_size = 64
+
+  output {
+    traces = [otelcol.exporter.otlp.v2_tempo.input]
+  }
+}
+
+otelcol.exporter.otlp "v2_tempo" {
+  timeout = "2s"
+
+  client {
+    endpoint = "tempo.v2-observability.svc.cluster.local:4317"
+    tls {
+      insecure = true
+    }
+  }
+
+  sending_queue {
+    enabled           = true
+    num_consumers     = 1
+    queue_size        = 16
+    block_on_overflow = false
+  }
+
+  retry_on_failure {
+    initial_interval = "1s"
+    max_interval     = "3s"
+    max_elapsed_time = "10s"
+  }
+}

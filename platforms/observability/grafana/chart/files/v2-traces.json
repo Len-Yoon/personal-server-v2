@@ -1,0 +1,185 @@
+{
+  "id": null,
+  "uid": "v2-traces",
+  "title": "V2 Traces",
+  "schemaVersion": 41,
+  "version": 1,
+  "refresh": "15s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "tags": [
+    "V2",
+    "traces"
+  ],
+  "timezone": "browser",
+  "editable": false,
+  "description": "V2 HTTP 요청 추적. 단일 Tempo 로컬 PVC이며 사용자 행동·본문·SQL 추적은 포함하지 않음.",
+  "templating": {
+    "list": [
+      {
+        "name": "environment",
+        "label": "환경",
+        "type": "custom",
+        "query": "dev,verify",
+        "current": {
+          "text": "dev",
+          "value": "dev"
+        },
+        "options": [
+          {
+            "text": "dev",
+            "value": "dev",
+            "selected": true
+          },
+          {
+            "text": "verify",
+            "value": "verify",
+            "selected": false
+          }
+        ]
+      },
+      {
+        "name": "service",
+        "label": "서비스",
+        "type": "custom",
+        "query": "portal,book,youtube",
+        "current": {
+          "text": "portal",
+          "value": "portal"
+        },
+        "options": [
+          {
+            "text": "portal",
+            "value": "portal",
+            "selected": true
+          },
+          {
+            "text": "book",
+            "value": "book",
+            "selected": false
+          },
+          {
+            "text": "youtube",
+            "value": "youtube",
+            "selected": false
+          }
+        ]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "요청 추적 확인",
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "Portal에서 검색한 뒤 아래 trace 검색 결과를 확인합니다. TraceID를 클릭하면 Tempo에서 부모·자식 span을 조회할 수 있습니다. Loki 로그의 TraceID 링크도 같은 Tempo로 연결됩니다.\n\nHTTP 메서드·고정 route·상태만 수집하며 query·본문·헤더·SQL은 수집하지 않습니다. 수집기 중단 중 trace는 버려질 수 있습니다. [로그 대시보드](/d/v2-logs) · [지표 대시보드](/d/v2-platform-lab)"
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Tempo scrape 가용성",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "v2-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{job=\"tempo\"}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Alloy trace 수신·전송 span 비율",
+      "gridPos": {
+        "h": 4,
+        "w": 18,
+        "x": 6,
+        "y": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "v2-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(otelcol_receiver_accepted_spans_total[5m]))",
+          "legendFormat": "accepted / s"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(otelcol_exporter_sent_spans_total[5m]))",
+          "legendFormat": "sent / s"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "table",
+      "title": "최근 서비스 trace",
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "datasource": {
+        "type": "tempo",
+        "uid": "v2-tempo"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "traceql",
+          "query": "{ resource.service.name = \"$service\" && resource.deployment.environment.name = \"$environment\" }",
+          "limit": 20,
+          "tableType": "traces"
+        }
+      ],
+      "options": {
+        "showHeader": true
+      }
+    }
+  ]
+}

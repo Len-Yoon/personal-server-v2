@@ -11,7 +11,7 @@ labels:
 images:
 - name: localhost:5001/v2-youtube
   newName: localhost:5001/v2-youtube
-  digest: sha256:f3ed0844b895c93c420780c95c5765ac4529a35214bfd8df551b6976d2e47fac
+  digest: sha256:2be7c51cb6337089344de97470fd064a62f1a8998c7e05953d362e5903fddf87
 patches:
 - patch: |
     apiVersion: apps/v1
@@ -28,3 +28,16 @@ patches:
               value: http://127.0.0.1:8090
             - name: V2_COOKIE_PREFIX
               value: v2_verify_
+- patch: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: youtube
+    spec:
+      template:
+        spec:
+          containers:
+          - name: youtube
+            env:
+            - name: V2_ENVIRONMENT
+              value: verify

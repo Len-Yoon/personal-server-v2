@@ -11,7 +11,7 @@ labels:
 images:
 - name: localhost:5001/v2-portal
   newName: localhost:5001/v2-portal
-  digest: sha256:4064f66644de281e7f68b72e7104089527cef255c80680fc86b9972558d33e28
+  digest: sha256:c5f3b0614ce97b36b273eca652a52d4425ccb0514bf7ba96ec7628606834f79e
 patches:
 - patch: |
     apiVersion: apps/v1
@@ -32,3 +32,16 @@ patches:
               value: http://127.0.0.1:8092
             - name: BOOK_MEMO_URL
               value: http://127.0.0.1:8081
+- patch: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: portal
+    spec:
+      template:
+        spec:
+          containers:
+          - name: portal
+            env:
+            - name: V2_ENVIRONMENT
+              value: verify

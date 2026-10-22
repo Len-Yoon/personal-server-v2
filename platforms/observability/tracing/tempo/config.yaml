@@ -1,0 +1,62 @@
+target: all
+stream_over_http_enabled: true
+
+server:
+  http_listen_port: 3200
+  grpc_listen_address: 127.0.0.1
+  grpc_listen_port: 9095
+  log_level: warn
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks
+
+live_store:
+  ring:
+    instance_addr: 127.0.0.1
+    kvstore:
+      store: inmemory
+  max_live_traces_bytes: 33554432
+  max_block_bytes: 8388608
+  query_block_concurrency: 2
+  complete_block_concurrency: 1
+  wal:
+    path: /var/tempo/live-store/traces
+  shutdown_marker_dir: /var/tempo/live-store/shutdown-marker
+
+querier:
+  max_concurrent_queries: 2
+  search:
+    query_timeout: 10s
+
+backend_worker:
+  compaction:
+    block_retention: 24h
+
+backend_scheduler:
+  local_work_path: /var/tempo/scheduler
+
+overrides:
+  defaults:
+    ingestion:
+      rate_limit_bytes: 262144
+      burst_size_bytes: 524288
+      max_traces_per_user: 1000
+    global:
+      max_bytes_per_trace: 262144
+    compaction:
+      block_retention: 24h
+
+usage_report:
+  reporting_enabled: false
