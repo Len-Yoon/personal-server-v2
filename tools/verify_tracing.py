@@ -153,7 +153,7 @@ with patch('requests.Session.post',post):
   assert client.get('/health').status_code==200
   response=client.get('/v2-export-boundary?token=v2-image-private-fixture',headers={'Authorization':'Bearer v2-image-private-fixture','Cookie':'synthetic=v2-image-private-fixture'})
   assert response.status_code==404
-  assert telemetry._tracer._active_span_processor.force_flush(10000)
+  assert telemetry._tracer.span_processor.force_flush(10000)
  assert not _runtime._owned and not _runtime._configured
  assert len(captured)==1
  message=ExportTraceServiceRequest.FromString(captured[0])

@@ -4,6 +4,7 @@ import importlib.util
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
@@ -31,6 +32,16 @@ def fixture():
 
 
 class TraceEvidenceTests(unittest.TestCase):
+    def test_image_boundary_probe_compiles_and_checks_native_exporters(self):
+        with patch.object(verification, "execute", return_value={"result": "PASS"}) as execute:
+            verification.check_image_export("v2-dev", "portal")
+        namespace, service, code = execute.call_args.args
+        self.assertEqual((namespace, service), ("v2-dev", "portal"))
+        compile(code, "<image-export-boundary>", "exec")
+        self.assertIn("TestClient(app)", code)
+        self.assertIn("assert not _runtime._owned and not _runtime._configured", code)
+        self.assertIn("assert len(captured)==1", code)
+
     def test_cross_service_parent_relationship_is_required(self):
         payload, trace = fixture()
         self.assertEqual(len(verification.inspect_trace(payload, trace, 'dev')['spans']), 5)
