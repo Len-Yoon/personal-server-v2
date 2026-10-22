@@ -394,9 +394,9 @@ def login_info():
         for role in ('admin','owner','app','backup','token'):
             credential = LOCAL / (namespace + '-' + role)
             if credential.exists():
-                address = 'http://localhost:8086/docs' if namespace == 'v2-data-dev' and role == 'token' else '클러스터 내부 전용'
+                address = 'http://localhost:8086/health' if namespace == 'v2-data-dev' and role == 'token' else '클러스터 내부 전용'
                 content += f'| {namespace} {role} | {address} | {read_private(credential).decode().strip()} |\n'
-    content += '\n메모 API는 Authorize에 Bearer 토큰을 사용합니다. DB는 localhost로 공개하지 않습니다.\n'
+    content += '\n메모 API는 Authorization 헤더에 Bearer 토큰을 사용합니다. DB는 localhost로 공개하지 않습니다.\n'
     content += '\nPortal 비밀번호는 파일함·관리자·포트폴리오 편집에 사용합니다.\nPrometheus: http://127.0.0.1:8084 (로그인 없음)\nArgo 8085는 로컬 인증서 검증 프록시 실행 시 사용합니다.\n'
     path = LOCAL / 'V2_로그인정보.md'
     replace_private(path, content.encode())

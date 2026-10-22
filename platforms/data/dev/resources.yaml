@@ -104,6 +104,7 @@ spec:
         runAsUser: 999
         runAsGroup: 999
         fsGroup: 999
+        fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -221,6 +222,7 @@ spec:
         runAsUser: 10001
         runAsGroup: 10001
         fsGroup: 999
+        fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -363,6 +365,7 @@ spec:
             runAsUser: 999
             runAsGroup: 999
             fsGroup: 999
+            fsGroupChangePolicy: OnRootMismatch
             seccompProfile:
               type: RuntimeDefault
           containers:
@@ -446,6 +449,7 @@ spec:
         runAsUser: 999
         runAsGroup: 999
         fsGroup: 999
+        fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -469,7 +473,8 @@ spec:
         - -c
         - import os,time,stat; p='/backups/archives'; os.makedirs(p,mode=0o700,exist_ok=True);
           s=os.lstat(p); assert stat.S_ISDIR(s.st_mode) and s.st_uid==os.getuid()
-          and stat.S_IMODE(s.st_mode) in (0o700,0o2700); os.chmod(p,0o700); time.sleep(2147483647)
+          and stat.S_IMODE(s.st_mode) in (0o700,0o2700,0o2770) and s.st_gid==999;
+          os.chmod(p,0o700); time.sleep(2147483647)
         volumeMounts:
         - name: backups
           mountPath: /backups
