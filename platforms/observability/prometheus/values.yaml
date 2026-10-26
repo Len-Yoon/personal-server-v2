@@ -251,6 +251,43 @@ prometheus:
         target_label: instance
       - target_label: __address__
         replacement: blackbox.v2-observability.svc.cluster.local:9115
+    - job_name: notes-api
+      metrics_path: /metrics
+      sample_limit: 64
+      static_configs:
+      - targets:
+        - notes-api.v2-data-dev.svc.cluster.local:8000
+        labels:
+          environment: dev
+          service: notes-api
+      metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: v2_notes_(api_.*|requests_total|errors_total|uptime_seconds)
+        action: keep
+    - job_name: notes-http
+      metrics_path: /probe
+      params:
+        module: [http_2xx]
+      static_configs:
+      - targets:
+        - http://notes-api.v2-data-dev.svc.cluster.local:8000/health
+        labels:
+          environment: dev
+          service: notes-api
+          endpoint: health
+      - targets:
+        - http://notes-api.v2-data-dev.svc.cluster.local:8000/ready
+        labels:
+          environment: dev
+          service: notes-api
+          endpoint: ready
+      relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox.v2-observability.svc.cluster.local:9115
     - job_name: loki
       static_configs:
       - targets:

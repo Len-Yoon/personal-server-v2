@@ -227,7 +227,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: api
-        image: localhost:5001/v2-notes-api@sha256:71cc6dbb9ec24f57df7f76e830f140ed2a99f3ec4c3c3c3f467224aa1922cd3f
+        image: localhost:5001/v2-notes-api@sha256:a01d91a65aa0708c7c0874539b440a08565917b5839d609d62e4a86acf473db6
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true

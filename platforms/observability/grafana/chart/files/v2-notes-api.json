@@ -1,0 +1,301 @@
+{
+  "id": null,
+  "uid": "v2-notes-api",
+  "title": "V2 메모 API",
+  "schemaVersion": 41,
+  "version": 1,
+  "refresh": "15s",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "tags": [
+    "V2",
+    "notes-api"
+  ],
+  "timezone": "browser",
+  "editable": false,
+  "description": "메모 API 업무 요청 지표. health/ready/version/metrics는 업무 요청에서 제외. 5xx와 4xx를 구분하며 응답 완료까지 서버 시간을 측정함. Pod 재시작 시 counter 초기화, 요청이 없으면 지연 분위수는 No data일 수 있음.",
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "지표 수집 상태 (1=정상)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "v2-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bool"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{job=\"notes-api\"}",
+          "legendFormat": "메모 API",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "HTTP health·ready (1=성공)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "v2-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bool"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "probe_success{job=\"notes-http\"}",
+          "legendFormat": "{{endpoint}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "메모 요청 수 / 초",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "v2-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(v2_notes_api_requests_total{job=\"notes-api\"}[2m]))",
+          "legendFormat": "메모 API",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "메모 5xx 오류율",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "v2-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(v2_notes_api_errors_total{job=\"notes-api\"}[2m])) / clamp_min(sum(rate(v2_notes_api_requests_total{job=\"notes-api\"}[2m])), 0.000000001)",
+          "legendFormat": "메모 API",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "메모 4xx 응답 / 초",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "v2-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(v2_notes_api_client_errors_total{job=\"notes-api\"}[2m]))",
+          "legendFormat": "메모 API",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "메모 응답 시간 p95",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "v2-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(v2_notes_api_duration_seconds_bucket{job=\"notes-api\"}[2m])))",
+          "legendFormat": "메모 API",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "메모 평균 응답 시간",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "v2-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(v2_notes_api_duration_seconds_sum{job=\"notes-api\"}[2m])) / sum(rate(v2_notes_api_duration_seconds_count{job=\"notes-api\"}[2m]))",
+          "legendFormat": "메모 API",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "메모 API 프로세스 가동 시간",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "v2-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "v2_notes_uptime_seconds{job=\"notes-api\"}",
+          "legendFormat": "메모 API",
+          "range": true
+        }
+      ]
+    }
+  ]
+}

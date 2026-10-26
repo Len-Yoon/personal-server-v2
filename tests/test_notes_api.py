@@ -2,6 +2,8 @@
 import copy
 import importlib.util
 import os
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import unittest
 from unittest.mock import patch
@@ -115,7 +117,7 @@ class NotesAPITest(unittest.TestCase):
         with patch.dict(os.environ, {'NOTES_API_TOKEN_FILE':'/missing-v2-test-secret'}):
             response = self.client.get('/version')
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {'service':'v2-notes-api', 'version':'1.1.0'})
+        self.assertEqual(response.json(), {'service':'v2-notes-api', 'version':'1.2.0'})
         self.assertEqual(self.db.queries, [])
         self.assertEqual(self.client.get('/notes').status_code, 401)
 
@@ -139,6 +141,64 @@ class NotesAPITest(unittest.TestCase):
         response = self.client.post('/notes',headers={**self.headers,'Content-Type':'application/json'},content='x'*(notes.MAX_BODY+1))
         self.assertEqual(response.status_code,413)
         self.assertEqual(self.db.queries,[])
+
+    def test_business_histogram_excludes_probes_and_records_failures(self):
+        ticks = iter([0.0, 0.02, 1.0, 1.07, 2.0, 2.8, 3.0, 3.001])
+        client = TestClient(notes.create_app(self.db.connect, clock=lambda:next(ticks)))
+        self.assertEqual(client.get('/health').status_code,200)
+        self.assertEqual(client.get('/notes?token=private-query').status_code,401)
+        self.assertEqual(client.get('/notes?limit=0',headers=self.headers).status_code,422)
+        self.db.unavailable = True
+        self.assertEqual(client.get('/notes',headers=self.headers).status_code,503)
+        metrics = client.get('/metrics').text
+        self.assertIn('v2_notes_api_requests_total 3\n',metrics)
+        self.assertIn('v2_notes_api_errors_total 1\n',metrics)
+        self.assertIn('v2_notes_api_client_errors_total 2\n',metrics)
+        self.assertIn('v2_notes_api_duration_seconds_bucket{le="0.05"} 1\n',metrics)
+        self.assertIn('v2_notes_api_duration_seconds_bucket{le="0.1"} 2\n',metrics)
+        self.assertIn('v2_notes_api_duration_seconds_bucket{le="+Inf"} 3\n',metrics)
+        self.assertIn('v2_notes_api_duration_seconds_count 3\n',metrics)
+        self.assertIn('v2_notes_api_duration_seconds_sum 0.871000000\n',metrics)
+        self.assertNotIn('private-query',metrics)
+        self.assertIn('\nv2_notes_api_requests_total 3\n',client.get('/metrics').text)
+
+    def test_unhandled_exception_and_body_limit_are_counted(self):
+        api = notes.create_app(self.db.connect)
+        @api.get('/notes/fault-test/raise')
+        def fault():
+            raise RuntimeError('private-error')
+        client = TestClient(api, raise_server_exceptions=False)
+        self.assertEqual(client.get('/notes/fault-test/raise').status_code,500)
+        self.assertEqual(client.post('/notes',content='x'*(notes.MAX_BODY+1)).status_code,413)
+        text = client.get('/metrics').text
+        self.assertIn('v2_notes_api_requests_total 2\n',text)
+        self.assertIn('v2_notes_api_errors_total 1\n',text)
+        self.assertIn('v2_notes_api_client_errors_total 1\n',text)
+        self.assertNotIn('private-error',text)
+
+    def test_metrics_concurrent_requests_keep_counts_and_buckets_consistent(self):
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            statuses = list(pool.map(lambda _:self.client.get('/notes').status_code,range(40)))
+        self.assertEqual(statuses,[401]*40)
+        text = self.client.get('/metrics').text
+        self.assertIn('v2_notes_api_requests_total 40\n',text)
+        self.assertIn('v2_notes_api_client_errors_total 40\n',text)
+        self.assertIn('v2_notes_api_duration_seconds_count 40\n',text)
+        counts = [int(line.rsplit(' ',1)[1]) for line in text.splitlines() if line.startswith('v2_notes_api_duration_seconds_bucket')]
+        self.assertEqual(counts,sorted(counts))
+        self.assertEqual(counts[-1],40)
+
+    def test_measurement_covers_response_body_completion_and_private_paths(self):
+        seen=[]
+        async def streaming(scope,receive,send):
+            await send({'type':'http.response.start','status':200,'headers':[]})
+            await send({'type':'http.response.body','body':b'x','more_body':False})
+        ticks=iter([1.0,1.25])
+        middleware=notes.RequestMetrics(streaming,lambda *args:seen.append(args),lambda:next(ticks))
+        async def send(message):pass
+        async def receive():return {'type':'http.request'}
+        asyncio.run(middleware({'type':'http','path':'/notes/private-uuid'},receive,send))
+        self.assertEqual(seen,[(200,0.25,True)])
 
     def test_metrics_no_unbounded_or_private_labels(self):
         self.client.get('/notes',headers=self.headers)
