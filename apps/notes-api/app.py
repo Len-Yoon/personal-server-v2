@@ -13,7 +13,8 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 MAX_BODY = 65536
-APP_VERSION = '1.1.0'
+APP_VERSION = '1.2.0'
+LATENCY_BUCKETS = (0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10)
 
 
 def private_setting(name):
@@ -83,21 +84,51 @@ class BodyLimit:
         await self.app(scope, replay, send)
 
 
-def create_app(connector=connect_database):
+class RequestMetrics:
+    """응답 본문 전송까지 측정하며 URL·본문·인증값을 저장하지 않음."""
+    def __init__(self, app, record, clock):
+        self.app, self.record, self.clock = app, record, clock
+
+    async def __call__(self, scope, receive, send):
+        if scope['type'] != 'http' or scope['path'] == '/metrics':
+            await self.app(scope, receive, send)
+            return
+        started = self.clock()
+        status = 500
+        async def measured_send(message):
+            nonlocal status
+            if message['type'] == 'http.response.start':
+                status = message['status']
+            await send(message)
+        try:
+            await self.app(scope, receive, measured_send)
+        finally:
+            business = scope['path'] == '/notes' or scope['path'].startswith('/notes/')
+            self.record(status, max(0.0, self.clock() - started), business)
+
+
+def create_app(connector=connect_database, clock=time.perf_counter):
     api = FastAPI(title='V2 메모 실습 API', docs_url=None, redoc_url=None, openapi_url=None)
     api.add_middleware(BodyLimit)
-    counters = {'requests': 0, 'errors': 0}
+    counters = {'requests': 0, 'errors': 0, 'api_requests': 0, 'api_errors': 0,
+                'api_client_errors': 0, 'duration_sum': 0.0}
+    buckets = [0 for _ in LATENCY_BUCKETS]
     counter_lock = threading.Lock()
     started = time.monotonic()
 
-    @api.middleware('http')
-    async def count_requests(request, call_next):
-        response = await call_next(request)
-        if request.url.path != '/metrics':
-            with counter_lock:
-                counters['requests'] += 1
-                counters['errors'] += int(response.status_code >= 500)
-        return response
+    def record(status, elapsed, business):
+        with counter_lock:
+            counters['requests'] += 1
+            counters['errors'] += int(status >= 500)
+            if business:
+                counters['api_requests'] += 1
+                counters['api_errors'] += int(status >= 500)
+                counters['api_client_errors'] += int(400 <= status < 500)
+                counters['duration_sum'] += elapsed
+                for index, boundary in enumerate(LATENCY_BUCKETS):
+                    buckets[index] += int(elapsed <= boundary)
+
+    api.add_middleware(RequestMetrics, record=record, clock=clock)
 
     def authenticate(authorization: str | None = Header(default=None)):
         try:
@@ -129,12 +160,32 @@ def create_app(connector=connect_database):
     def metrics():
         with counter_lock:
             values = dict(counters)
-        return Response('# TYPE v2_notes_requests_total counter\n'
+            counts = list(buckets)
+        histogram = ''.join(f'v2_notes_api_duration_seconds_bucket{{le="{boundary}"}} {count}\n'
+                            for boundary, count in zip(LATENCY_BUCKETS, counts))
+        return Response('# HELP v2_notes_requests_total All HTTP requests excluding metrics scrapes.\n'
+            '# TYPE v2_notes_requests_total counter\n'
             f'v2_notes_requests_total {values["requests"]}\n'
+            '# HELP v2_notes_errors_total All HTTP server failures excluding metrics scrapes.\n'
             '# TYPE v2_notes_errors_total counter\n'
             f'v2_notes_errors_total {values["errors"]}\n'
+            '# HELP v2_notes_uptime_seconds Time since API process started.\n'
             '# TYPE v2_notes_uptime_seconds gauge\n'
-            f'v2_notes_uptime_seconds {time.monotonic() - started:.3f}\n',
+            f'v2_notes_uptime_seconds {time.monotonic() - started:.3f}\n'
+            '# HELP v2_notes_api_requests_total Requests to notes paths, excluding probes and scrapes.\n'
+            '# TYPE v2_notes_api_requests_total counter\n'
+            f'v2_notes_api_requests_total {values["api_requests"]}\n'
+            '# HELP v2_notes_api_errors_total Notes HTTP server failures.\n'
+            '# TYPE v2_notes_api_errors_total counter\n'
+            f'v2_notes_api_errors_total {values["api_errors"]}\n'
+            '# HELP v2_notes_api_client_errors_total Notes HTTP client errors including authentication failures.\n'
+            '# TYPE v2_notes_api_client_errors_total counter\n'
+            f'v2_notes_api_client_errors_total {values["api_client_errors"]}\n'
+            '# HELP v2_notes_api_duration_seconds Notes response completion duration including failures.\n'
+            '# TYPE v2_notes_api_duration_seconds histogram\n'
+            + histogram + f'v2_notes_api_duration_seconds_bucket{{le="+Inf"}} {values["api_requests"]}\n'
+            f'v2_notes_api_duration_seconds_count {values["api_requests"]}\n'
+            f'v2_notes_api_duration_seconds_sum {values["duration_sum"]:.9f}\n',
             media_type='text/plain; version=0.0.4')
 
     @api.get('/notes', dependencies=[Depends(authenticate)])

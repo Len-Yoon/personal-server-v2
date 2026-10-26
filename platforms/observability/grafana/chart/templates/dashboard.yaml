@@ -12,3 +12,5 @@ data:
     {{- .Files.Get "files/v2-logs.json" | nindent 4 }}
   v2-traces.json: |
     {{- .Files.Get "files/v2-traces.json" | nindent 4 }}
+  v2-notes-api.json: |
+    {{- .Files.Get "files/v2-notes-api.json" | nindent 4 }}
