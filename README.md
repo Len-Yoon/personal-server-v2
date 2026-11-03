@@ -14,6 +14,8 @@ V1에서 개발한 Portal·Book·YouTube를 맥북 전용 Kubernetes에 재구�
 | 관측 | Prometheus·Grafana, Pod 로그 Alloy→Loki, 세 앱 HTTP trace Alloy→Tempo | notes-api는 업무 지표·health/ready 관측, 로그·trace 통합은 미구현 |
 | 보호·복원 | RBAC·NetworkPolicy·PSA·VAP/CEL, 별도 PostgreSQL 논리 백업·빈 DB 복원 | 동일 맥북 복원 실습, 원격 DR·PITR 미구현 |
 
+**공부용 자료:** [V2 쉬운 개념과 면접 문답 24개](docs/20261103_V2_쉬운개념과_면접문답.md) · [V1·V2 기준자료와 읽는 순서](https://github.com/Len-Yoon/personal-server/blob/main/docs/20261103_V1V2_학습기준자료.md). 개념의 뜻·선택 이유·실제 코드·흔한 오해를 함께 설명함.
+
 ## 검증 기록과 현재 상태
 
 2026-10-26 기능 기준 `a274143`에서 회귀 143개 PASS(skip 0), Argo 18개 Synced/Healthy, 관측 대상 27개 UP, notes-api 대시보드 8패널을 확인한 **과거 로컬 검증 기록**이 있음. 약 183초·12표본의 관측을 장기 가용성이나 부하 성능으로 해석하지 않음. [원본 검증 기록](docs/20261026_V2_관측배포_고도화검증.md)
