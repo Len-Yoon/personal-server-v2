@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1080" viewBox="0 0 1440 1080" role="img" aria-labelledby="title desc">
+<title id="title">V2 Kubernetes 실습 플랫폼의 구성과 흐름</title>
+<desc id="desc">단일 맥북의 OrbStack과 k3d 안에 dev 및 verify 앱, 별도 PostgreSQL, Argo CD와 관측 도구를 구성한다. PR과 CI 뒤 수동 Sync로 배포하며 CI는 클러스터에 배포하지 않는다. 세 앱의 로그와 trace, notes-api의 지표를 구분하고 V1 운영 환경과 물리적으로 분리된 재해복구는 범위에서 제외한다. 구성 설명이며 현재 가동 정상 상태를 뜻하지 않는다.</desc>
+<defs><marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0 0L10 4L0 8Z" fill="#52677d"/></marker><style>text{font-family:'Apple SD Gothic Neo','Noto Sans KR',sans-serif;fill:#20344b}.title{font-size:30px;font-weight:700}.h{font-size:23px;font-weight:700}.b{font-size:19px}.s{font-size:17px}.small{font-size:16px}.box{fill:#fff;stroke:#b4c6d8;stroke-width:2}.line{fill:none;stroke:#52677d;stroke-width:2.5;marker-end:url(#arrow)}.dash{stroke-dasharray:7 5}</style></defs>
+<rect width="1440" height="1080" fill="#f7f9fc"/>
+<text x="48" y="55" class="title">Personal Server V2 · 배포·관측·복원 실습 구조</text>
+<text x="48" y="89" class="b">구현 구성도 · 과거 검증과 현재 실행 상태는 별도 확인 · V1/N100 운영 이전 없음</text>
+<rect x="40" y="120" width="1360" height="145" rx="16" fill="#eaf0f8" stroke="#b4c6d8"/>
+<text x="64" y="153" class="h">변경 검토와 배포</text>
+<rect x="65" y="174" width="330" height="66" rx="10" class="box"/><text x="84" y="201" class="b">로컬 테스트 → ARM64 빌드</text><text x="84" y="226" class="s">loopback registry 등록 · digest 고정</text>
+<rect x="458" y="174" width="300" height="66" rx="10" class="box"/><text x="478" y="201" class="b">PR · CI · 독립 검토 → main</text><text x="478" y="226" class="s">CI: 테스트·렌더링·설정 검사</text>
+<rect x="825" y="174" width="520" height="66" rx="10" class="box"/><text x="846" y="201" class="b">Argo CD · 커밋 지정 수동 Sync</text><text x="846" y="226" class="s">자동 Sync / 자동 prune 없음 · CI의 로컬 배포 없음</text>
+<path d="M395 207H452" class="line"/><path d="M758 207H819" class="line"/>
+<rect x="40" y="295" width="1360" height="650" rx="18" fill="#eef6f4" stroke="#5c9d8d" stroke-width="2"/>
+<text x="65" y="334" class="h">단일 Mac · OrbStack · k3d-ps-v2</text><text x="65" y="365" class="b">server 1 + worker 2 = 같은 호스트의 컨테이너 · 전용 context / 소유 확인 · 물리 HA 아님</text>
+<path d="M1085 240V390H1250V400" class="line"/><path d="M1085 390H435V400" class="line"/><text x="1095" y="285" class="small">앱·플랫폼 수동 적용</text>
+<rect x="65" y="405" width="740" height="245" rx="12" class="box"/>
+<text x="86" y="441" class="h">세 앱 · dev / verify별 실습 환경</text><text x="86" y="473" class="s">브라우저 → localhost 포워딩 → Portal → Book / YouTube</text>
+<rect x="90" y="497" width="180" height="63" rx="9" fill="#eaf0f8"/><text x="135" y="536" class="h">Portal</text>
+<rect x="320" y="497" width="180" height="63" rx="9" fill="#eaf0f8"/><text x="370" y="536" class="h">Book</text>
+<rect x="550" y="497" width="220" height="63" rx="9" fill="#eaf0f8"/><text x="608" y="536" class="h">YouTube</text>
+<path d="M270 528H314" class="line"/><path d="M180 560V579H660V566" class="line"/>
+<text x="90" y="609" class="s">고정 V1 소스 + V2 주소·쿠키·HTTP 계측 패치</text>
+<text x="90" y="634" class="s">환경별 PVC · 실습 인증 · V1 운영 데이터 / Secret 복사 없음</text>
+<rect x="835" y="405" width="540" height="245" rx="12" class="box"/>
+<text x="855" y="441" class="h">별도 데이터 실습 · v2-data-dev / restore</text>
+<text x="855" y="483" class="b">notes-api → PostgreSQL · 전용 PVC</text>
+<text x="855" y="521" class="b">논리 백업 → 백업 PVC → 맥북 반출</text>
+<text x="855" y="559" class="b">→ 빈 별도 DB 복원 · 전체 행 hash 대조</text>
+<text x="855" y="604" class="s">기존 세 앱 SQLite 교체 아님</text><text x="855" y="631" class="s">같은 물리 호스트 복원 · 원격 DR / PITR 미구현</text>
+<rect x="65" y="693" width="1310" height="153" rx="12" class="box"/>
+<text x="86" y="728" class="h">관측 · 수집 범위를 구분함</text>
+<text x="90" y="767" class="b">지표: Prometheus / Blackbox → Grafana</text>
+<text x="90" y="803" class="s">앱·Kubernetes·Argo + notes-api 업무 요청·오류·지연</text>
+<text x="770" y="767" class="b">로그: Pod → Alloy → Loki → Grafana</text>
+<text x="770" y="803" class="s">trace: 세 앱 OpenTelemetry → Alloy → Tempo → Grafana</text>
+<path d="M435 650V687" class="line"/><path d="M1105 650V687" class="line"/>
+<text x="65" y="882" class="b">보호: 전용 SA / RBAC · NetworkPolicy · PSA · VAP/CEL · Secret 비게시</text>
+<text x="65" y="917" class="s">notes-api 로그·trace 통합 미구현 · 수집 무손실·장기 SLO 보장 아님 · 포워딩 프로세스 유지 필요</text>
+<rect x="40" y="968" width="1360" height="77" rx="12" fill="#fff4e4" stroke="#e1bf88"/>
+<text x="65" y="999" class="b">범위 밖: N100/V1 배포 · 운영 데이터 사용 · 물리 HA · 원격 DR · PITR · SBOM / 서명 검증</text>
+<text x="65" y="1026" class="s">에이전트의 구현·검증 기록과 사용자가 직접 수행한 진단·복구 경험을 구분함.</text>
+</svg>
