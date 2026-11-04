@@ -14,7 +14,7 @@ V1에서 개발한 Portal·Book·YouTube를 맥북 전용 Kubernetes에 재구�
 | 관측 | Prometheus·Grafana, Pod 로그 Alloy→Loki, 세 앱 HTTP trace Alloy→Tempo | notes-api는 업무 지표·health/ready 관측, 로그·trace 통합은 미구현 |
 | 보호·복원 | RBAC·NetworkPolicy·PSA·VAP/CEL, 별도 PostgreSQL 논리 백업·빈 DB 복원 | 동일 맥북 복원 실습, 원격 DR·PITR 미구현 |
 
-**공부용 자료:** [V2 쉬운 개념과 면접 문답 24개](docs/20261103_V2_쉬운개념과_면접문답.md) · [V1·V2 기준자료와 읽는 순서](https://github.com/Len-Yoon/personal-server/blob/main/docs/20261103_V1V2_학습기준자료.md). 개념의 뜻·선택 이유·실제 코드·흔한 오해를 함께 설명함.
+**공부용 자료:** [V2 개념과 면접 문답 12단계](docs/20261104_V2_개념과면접문답.md) · [V1·V2 기준자료와 읽는 순서](https://github.com/Len-Yoon/personal-server/blob/main/docs/20261104_V1V2_학습안내.md). 개념의 뜻·선택 이유·실제 코드·흔한 오해를 함께 설명함.
 
 ## 검증 기록과 현재 상태
 
