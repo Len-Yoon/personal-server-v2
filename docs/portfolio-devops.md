@@ -1,6 +1,6 @@
 # Personal Server V2 프로젝트 설명
 
-[쉽게 읽는 개념·예상 질문 24개](20261103_V2_쉬운개념과_면접문답.md) · [V1·V2 학습 기준자료](https://github.com/Len-Yoon/personal-server/blob/main/docs/20261103_V1V2_학습기준자료.md)
+[쉽게 읽는 12단계·기본 질문 12개](20261104_V2_개념과면접문답.md) · [V1·V2 학습 기준자료](https://github.com/Len-Yoon/personal-server/blob/main/docs/20261104_V1V2_학습안내.md)
 
 ## 1. 문서 정보
 
